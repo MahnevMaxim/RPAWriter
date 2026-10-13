@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="RPAWriter/RPAWriter.csproj">
+    <Deploy />
+  </Project>
+  <Project Path="RPAWriter.Core/RPAWriter.Core.csproj" />
+  <Project Path="RPAWriter.Tests/RPAWriter.Tests.csproj" />
+</Solution>
+
