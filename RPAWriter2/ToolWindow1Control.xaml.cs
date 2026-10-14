@@ -243,6 +243,27 @@ namespace RPAWriter2
             }
             catch (Exception ex) { ShowError(ex); }
         }
+
+        private void OnAnalyzeLogs(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Title = "Файлы логов",
+                Filter = "Логи (*.log;*.txt;*.json)|*.log;*.txt;*.json|Все файлы (*.*)|*.*",
+                Multiselect = true
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            try
+            {
+                var lines = new List<string>();
+                foreach (var f in dlg.FileNames) lines.AddRange(File.ReadAllLines(f));
+                var analysis = new LogAnalyzer().Analyze(lines);
+                SetOutput(analysis.Summary);
+                foreach (var err in analysis.Errors.Take(20)) AppendChat("ERR: " + err.Message);
+            }
+            catch (Exception ex) { ShowError(ex); }
+        }
 #pragma warning restore VSTHRD100
 
         private async Task SendMessageAsync()
