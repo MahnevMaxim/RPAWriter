@@ -205,6 +205,7 @@
                     <Button Content="Сформировать БЗ" Click="OnFormKnowledgeBase" Margin="0,5,8,0"/>
                     <Button Content="Опубликовать" Click="OnBuildRelease" Margin="0,5,8,0"/>
                     <Button Content="Анализ логов" Click="OnAnalyzeLogs" Margin="0,5,8,0"/>
+                    <Button Content="UiPath → WF" Click="OnConvertUiPath" Margin="0,5,8,0"/>
                 </WrapPanel>
                 <Border x:Name="NoticeBar" DockPanel.Dock="Top" Background="#4DFF8C00"
                         CornerRadius="2" Padding="10,6" Margin="0,0,0,8"

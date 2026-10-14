@@ -35,12 +35,6 @@
          other menus or buttons (commands); from a visual point of view you can see the
          group as the part of a menu contained between two lines. The parent of a group
          must be a menu. -->
-    <Groups>
-      <Group guid="guidRPAWriter2PackageCmdSet" id="MyMenuGroup" priority="0x0600">
-        <Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS" />
-      </Group>
-    </Groups>
-
     <!--Buttons section. -->
     <!--This section defines the elements the user can interact with, like a menu command or a button
         or combo box in a toolbar. -->
@@ -52,18 +46,11 @@
               <CommandFlag>DefaultInvisible</CommandFlag>
               <CommandFlag>DynamicVisibility</CommandFlag>
           If you do not want an image next to your command, remove the Icon node /> -->
-      <Button guid="guidRPAWriter2PackageCmdSet" id="Command1Id" priority="0x0100" type="Button">
-        <Parent guid="guidRPAWriter2PackageCmdSet" id="MyMenuGroup" />
-        <Icon guid="guidImages" id="bmpPic1" />
-        <Strings>
-          <ButtonText>Invoke Command1</ButtonText>
-        </Strings>
-      </Button>
       <Button guid="guidRPAWriter2PackageCmdSet" id="cmdidToolWindow1Command" priority="0x0100" type="Button">
         <Parent guid="guidSHLMainMenu" id="IDG_VS_TOOLS_EXT_CUST" />
         <Icon guid="guidImages1" id="bmpPic1" />
         <Strings>
-          <ButtonText>ToolWindow1</ButtonText>
+          <ButtonText>RPA Writer</ButtonText>
         </Strings>
       </Button>
     </Buttons>
@@ -75,7 +62,6 @@
             bitmap strip containing the bitmaps and then there are the numeric ids of the elements used
             inside a button definition. An important aspect of this declaration is that the element id
             must be the actual index (1-based) of the bitmap inside the bitmap strip. -->
-      <Bitmap guid="guidImages" href="Resources\Command1.png" usedList="bmpPic1, bmpPic2, bmpPicSearch, bmpPicX, bmpPicArrows, bmpPicStrikethrough" />
       <Bitmap guid="guidImages1" href="Resources\ToolWindow1Command.png" usedList="bmpPic1, bmpPic2, bmpPicSearch, bmpPicX, bmpPicArrows, bmpPicStrikethrough" />
     </Bitmaps>
   </Commands>
@@ -86,19 +72,10 @@
 
     <!-- This is the guid used to group the menu commands together -->
     <GuidSymbol name="guidRPAWriter2PackageCmdSet" value="{d648562d-8124-4a1f-9574-4874fa421738}">
-      <IDSymbol name="MyMenuGroup" value="0x1020" />
-      <IDSymbol name="Command1Id" value="0x0100" />
       <IDSymbol value="4129" name="cmdidToolWindow1Command" />
     </GuidSymbol>
 
-    <GuidSymbol name="guidImages" value="{c3d26644-2041-425c-81bb-b569e20eb879}">
-      <IDSymbol name="bmpPic1" value="1" />
-      <IDSymbol name="bmpPic2" value="2" />
-      <IDSymbol name="bmpPicSearch" value="3" />
-      <IDSymbol name="bmpPicX" value="4" />
-      <IDSymbol name="bmpPicArrows" value="5" />
-      <IDSymbol name="bmpPicStrikethrough" value="6" />
-    </GuidSymbol>
+
   
     <GuidSymbol value="{7d185411-8f06-4714-be7a-ca0cf704310a}" name="guidImages1">
       <IDSymbol name="bmpPic1" value="1" />

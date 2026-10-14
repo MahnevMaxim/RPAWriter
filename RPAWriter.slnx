@@ -5,10 +5,6 @@
   <Project Path="RPAWriter.Tests/RPAWriter.Tests.csproj">
     <BuildType Project="Release" />
   </Project>
-  <Project Path="RPAWriter/RPAWriter.csproj">
-    <BuildType Project="Release" />
-    <Deploy />
-  </Project>
   <Project Path="RPAWriter2/RPAWriter2.csproj" Id="951952a7-20d8-4800-9db3-ad394effc8cd">
     <Deploy />
   </Project>

@@ -264,6 +264,29 @@ namespace RPAWriter2
             }
             catch (Exception ex) { ShowError(ex); }
         }
+
+        private void OnConvertUiPath(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Title = "Робот UiPath",
+                Filter = "UiPath workflow (*.xaml)|*.xaml|Все файлы (*.*)|*.*"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            try
+            {
+                var xaml = File.ReadAllText(dlg.FileName);
+                var result = new UiPathToWfConverter(new RobotGenerator()).Convert(xaml);
+                var dir = Path.GetDirectoryName(dlg.FileName);
+                var baseName = Path.GetFileNameWithoutExtension(dlg.FileName);
+                File.WriteAllText(Path.Combine(dir, baseName + ".wf.xaml"), result.Xaml);
+                File.WriteAllText(Path.Combine(dir, baseName + ".wf.cs"), result.CSharpCode);
+                SetOutput(result.Xaml + "\n\n--- C# ---\n\n" + result.CSharpCode);
+                AppendChat("Конвертация завершена. Предупреждений: " + result.Warnings.Count);
+            }
+            catch (Exception ex) { ShowError(ex); }
+        }
 #pragma warning restore VSTHRD100
 
         private async Task SendMessageAsync()
