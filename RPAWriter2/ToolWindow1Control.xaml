@@ -157,12 +157,7 @@
             </Setter>
         </Style>
     </UserControl.Resources>
-    <DockPanel Margin="8">
-        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-            <Button Content="Импорт ТЗ" Click="OnImportSpec" Margin="0,0,8,0"/>
-            <Button Content="Поиск похожих" Click="OnFindSimilar" Margin="0,0,8,0"/>
-        </WrapPanel>
-        <TabControl x:Name="MainTabs">
+    <TabControl x:Name="MainTabs" Margin="8">
         <TabItem Header="Чат">
             <Grid>
                 <Grid.RowDefinitions>
@@ -201,10 +196,22 @@
             </Grid>
         </TabItem>
 
-        <TabItem Header="Результат">
-            <TextBox x:Name="OutputBox" IsReadOnly="True"
-                     AcceptsReturn="True" TextWrapping="Wrap"
-                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+        <TabItem Header="ТЗ">
+            <DockPanel>
+                <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <Button Content="Импорт ТЗ" Click="OnImportSpec" Margin="0,5,8,0"/>
+                    <Button Content="Поиск похожих" Click="OnFindSimilar" Margin="0,5,8,0"/>
+                    <Button Content="Сгенерировать робота" Click="OnGenerateRobot" Margin="0,5,8,0"/>
+                </WrapPanel>
+                <Border x:Name="NoticeBar" DockPanel.Dock="Top" Background="#4DFF8C00"
+                        CornerRadius="2" Padding="10,6" Margin="0,0,0,8"
+                        Visibility="Collapsed">
+                    <TextBlock x:Name="NoticeText" Foreground="#FFE3B3" TextWrapping="Wrap"/>
+                </Border>
+                <TextBox x:Name="OutputBox" IsReadOnly="True"
+                         AcceptsReturn="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+            </DockPanel>
         </TabItem>
 
         <TabItem x:Name="SettingsTab" Header="Настройки">
@@ -236,6 +243,5 @@
                 <Button Grid.Row="4" Grid.Column="1" Content="Сохранить настройки" HorizontalAlignment="Left" Margin="0,4,0,0" Click="OnSaveSettings"/>
             </Grid>
         </TabItem>
-        </TabControl>
-    </DockPanel>
+    </TabControl>
 </UserControl>

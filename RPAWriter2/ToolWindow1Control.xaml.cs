@@ -92,6 +92,17 @@ namespace RPAWriter2
             SetOutput(ex.ToString());
         }
 
+        private void ShowNotice(string message)
+        {
+            NoticeText.Text = message;
+            NoticeBar.Visibility = Visibility.Visible;
+        }
+
+        private void HideNotice()
+        {
+            NoticeBar.Visibility = Visibility.Collapsed;
+        }
+
 #pragma warning disable VSTHRD100 // обработчики событий WPF — async void
         private async void OnSend(object sender, RoutedEventArgs e)
         {
@@ -123,6 +134,7 @@ namespace RPAWriter2
                 var tasks = await _ai.DecomposeTasksAsync(spec.RawText);
                 spec.Tasks = tasks.ToList();
                 _currentSpec = spec;
+                HideNotice();
 
                 var sb = new StringBuilder();
                 sb.AppendLine("ТЗ: " + spec.Name);
@@ -144,7 +156,7 @@ namespace RPAWriter2
 
         private async void OnFindSimilar(object sender, RoutedEventArgs e)
         {
-            if (_currentSpec == null) { AppendChat("Сначала импортируйте ТЗ."); return; }
+            if (_currentSpec == null) { ShowNotice("Сначала импортируйте ТЗ."); return; }
             try
             {
                 var kbPath = RequireKbPath();
@@ -159,6 +171,30 @@ namespace RPAWriter2
                     sb.AppendLine("[" + m.Score.ToString("P0") + "] " + m.Solution.Name + " — " + string.Join("; ", m.Reasons));
                 SetOutput(sb.Length == 0 ? "Похожих задач не найдено." : sb.ToString());
                 AppendChat("Найдено похожих задач: " + matches.Count);
+            }
+            catch (Exception ex) { ShowError(ex); }
+        }
+
+        private async void OnGenerateRobot(object sender, RoutedEventArgs e)
+        {
+            if (_currentSpec == null) { ShowNotice("Сначала импортируйте ТЗ."); return; }
+            try
+            {
+                var kbPath = RequireKbPath();
+                if (kbPath == null) return;
+                var kb = new FileKnowledgeBase(kbPath);
+                var pipeline = new RpaPipelineService(new OpenXmlDocumentReader(), _ai, kb, new RobotGenerator());
+                var result = await pipeline.GenerateRobotFromSpecAsync(_currentSpec.SourcePath);
+
+                var dir = Path.GetDirectoryName(_currentSpec.SourcePath);
+                var baseName = Path.GetFileNameWithoutExtension(_currentSpec.SourcePath);
+                var xamlPath = Path.Combine(dir, baseName + ".xaml");
+                var csPath = Path.Combine(dir, baseName + ".Actions.cs");
+                File.WriteAllText(xamlPath, result.Xaml);
+                File.WriteAllText(csPath, result.CSharpCode);
+
+                SetOutput(result.Xaml + "\n\n--- C# ---\n\n" + result.CSharpCode);
+                AppendChat("Робот сгенерирован и сохранён рядом с ТЗ: " + xamlPath + ", " + csPath);
             }
             catch (Exception ex) { ShowError(ex); }
         }
