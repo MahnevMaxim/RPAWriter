@@ -285,6 +285,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Base URL" VerticalAlignment="Center" Margin="0,0,8,4"/>
@@ -302,7 +303,10 @@
                 <TextBlock Grid.Row="4" Grid.Column="0" Text="Каталог решений роботов" VerticalAlignment="Center" Margin="0,0,8,4"/>
                 <TextBox Grid.Row="4" Grid.Column="1" x:Name="RobotsRootPathBox" Margin="0,0,0,4"/>
 
-                <Button Grid.Row="5" Grid.Column="1" Content="Сохранить настройки" HorizontalAlignment="Left" Margin="0,4,0,0" Click="OnSaveSettings"/>
+                <TextBlock Grid.Row="5" Grid.Column="0" Text="Название файла шаблона робота" VerticalAlignment="Center" Margin="0,0,8,4"/>
+                <TextBox Grid.Row="5" Grid.Column="1" x:Name="RobotTemplateNameBox" Margin="0,0,0,4"/>
+
+                <Button Grid.Row="6" Grid.Column="1" Content="Сохранить настройки" HorizontalAlignment="Left" Margin="0,4,0,0" Click="OnSaveSettings"/>
             </Grid>
         </TabItem>
     </TabControl>

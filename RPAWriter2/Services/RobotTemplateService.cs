@@ -18,15 +18,13 @@ namespace RPAWriter2.Services
     }
 
     /// <summary>
-    /// Создание решения робота из установленного шаблона решения «RPA-XXXX».
+    /// Создание решения робота из установленного шаблона решения (название шаблона задаётся в настройках).
     /// Имя решения = «RPA-&lt;номер&gt;». Работает только когда не открыто ни одного решения.
     /// </summary>
     public class RobotTemplateService
     {
-        public const string TemplateName = "RPA-XXXX";
-
         public async Task<RobotCreateResult> CreateRobotAsync(
-            string solutionName, string rootPath, CancellationToken cancellationToken = default)
+            string solutionName, string rootPath, string templateName, CancellationToken cancellationToken = default)
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
@@ -48,9 +46,12 @@ namespace RPAWriter2.Services
             if (Directory.Exists(destDir) || File.Exists(slnFile))
                 return Fail("Решение \"" + solutionName + "\" уже существует: " + destDir);
 
-            var templatePath = FindTemplate(TemplateName);
+            if (string.IsNullOrWhiteSpace(templateName))
+                return Fail("Не задано название шаблона робота (настройка «Название файла шаблона робота»).");
+
+            var templatePath = FindTemplate(templateName);
             if (templatePath == null)
-                return Fail("Шаблон решения \"" + TemplateName + "\" не найден. Установите шаблон и повторите.");
+                return Fail("Шаблон решения \"" + templateName.Trim() + "\" не найден. Установите шаблон и повторите.");
 
             try
             {
@@ -94,6 +95,9 @@ namespace RPAWriter2.Services
 
         private static string? FindTemplate(string name)
         {
+            name = (name ?? "").Trim();
+            if (name.Length == 0) return null;
+
             var roots = new List<string>();
 
             // Пользовательские шаблоны: %USERPROFILE%\Documents\Visual Studio <ver>\Templates\ProjectTemplates
@@ -113,22 +117,36 @@ namespace RPAWriter2.Services
                 if (Directory.Exists(ide)) roots.Add(ide);
             }
 
+            // Имя может быть задано с расширением (.zip/.vstemplate) или без него.
+            var hasExtension = name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                               || name.EndsWith(".vstemplate", StringComparison.OrdinalIgnoreCase);
+            var baseName = hasExtension ? Path.GetFileNameWithoutExtension(name) : name;
+
             foreach (var root in roots)
             {
-                // Каталог с именем шаблона, внутри которого лежит <name>.vstemplate
-                foreach (var dir in SafeEnumerateDirectories(root, name, SearchOption.AllDirectories))
+                // 1) Прямой файл-шаблон (.vstemplate или .zip) с подходящим именем (рекурсивно).
+                foreach (var f in SafeEnumerateFiles(root, "*.vstemplate", SearchOption.AllDirectories))
+                    if (MatchesName(f, name, baseName, hasExtension)) return f;
+                foreach (var f in SafeEnumerateFiles(root, "*.zip", SearchOption.AllDirectories))
+                    if (MatchesName(f, name, baseName, hasExtension)) return f;
+
+                // 2) Каталог с именем шаблона, внутри которого лежит .vstemplate (или .zip).
+                foreach (var dir in SafeEnumerateDirectories(root, baseName, SearchOption.AllDirectories))
                 {
-                    var vst = Path.Combine(dir, name + ".vstemplate");
-                    if (File.Exists(vst)) return vst;
+                    foreach (var vst in SafeEnumerateFiles(dir, "*.vstemplate", SearchOption.TopDirectoryOnly))
+                        return vst;
+                    foreach (var zip in SafeEnumerateFiles(dir, "*.zip", SearchOption.TopDirectoryOnly))
+                        return zip;
                 }
-                // Плоский файл <name>.vstemplate или <name>.zip
-                foreach (var f in SafeEnumerateFiles(root, name + ".vstemplate", SearchOption.AllDirectories))
-                    return f;
-                foreach (var f in SafeEnumerateFiles(root, name + ".zip", SearchOption.AllDirectories))
-                    if (string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase))
-                        return f;
             }
             return null;
+        }
+
+        private static bool MatchesName(string filePath, string name, string baseName, bool hasExtension)
+        {
+            if (hasExtension)
+                return string.Equals(Path.GetFileName(filePath), name, StringComparison.OrdinalIgnoreCase);
+            return string.Equals(Path.GetFileNameWithoutExtension(filePath), baseName, StringComparison.OrdinalIgnoreCase);
         }
 
         private static IEnumerable<string> SafeEnumerateDirectories(string path, string pattern, SearchOption option = SearchOption.TopDirectoryOnly)

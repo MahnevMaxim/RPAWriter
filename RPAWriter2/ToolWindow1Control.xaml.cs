@@ -55,6 +55,7 @@ namespace RPAWriter2
             ModelBox.Text = string.IsNullOrWhiteSpace(_settings.Model) ? "gpt-4o-mini" : _settings.Model;
             KbPathBox.Text = _settings.KnowledgeBasePath ?? "";
             RobotsRootPathBox.Text = _settings.RobotsRootPath ?? "";
+            RobotTemplateNameBox.Text = _settings.RobotTemplateName ?? "";
         }
 
         private void RecreateAiProvider()
@@ -408,7 +409,7 @@ namespace RPAWriter2
             var solutionName = "RPA-" + number;
             try
             {
-                var result = await _robotTemplate.CreateRobotAsync(solutionName, _settings.RobotsRootPath);
+                var result = await _robotTemplate.CreateRobotAsync(solutionName, _settings.RobotsRootPath, _settings.RobotTemplateName);
                 if (result.Success)
                     AppendChat("Робот создан: " + result.SolutionPath);
                 else
@@ -466,6 +467,7 @@ namespace RPAWriter2
             _settings.Model = ModelBox.Text.Trim();
             _settings.KnowledgeBasePath = KbPathBox.Text.Trim();
             _settings.RobotsRootPath = RobotsRootPathBox.Text.Trim();
+            _settings.RobotTemplateName = RobotTemplateNameBox.Text.Trim();
             SettingsStore.Save(_settings);
             RecreateAiProvider();
             AppendChat("Настройки сохранены. Провайдер: " + (_ai is StubAiProvider ? "заглушка (офлайн)" : "OpenAI-совместимый"));

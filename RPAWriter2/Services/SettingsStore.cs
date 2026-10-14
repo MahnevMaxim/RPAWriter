@@ -12,6 +12,7 @@ namespace RPAWriter2.Services
         public string Model { get; set; } = "gpt-4o-mini";
         public string KnowledgeBasePath { get; set; } = "";
         public string RobotsRootPath { get; set; } = "";
+        public string RobotTemplateName { get; set; } = "";
     }
 
     /// <summary>Загрузка/сохранение настроек в %AppData%\RPAWriter2\settings.json.</summary>
