@@ -9,7 +9,7 @@
     <BuildType Project="Release" />
     <Deploy />
   </Project>
-  <Project Path="VSIXProject1/VSIXProject1.csproj" Id="6dd44e37-5bce-46ce-a021-fa40c5742d13">
+  <Project Path="RPAWriter2/RPAWriter2.csproj" Id="951952a7-20d8-4800-9db3-ad394effc8cd">
     <Deploy />
   </Project>
 </Solution>

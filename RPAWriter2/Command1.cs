@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Task = System.Threading.Tasks.Task;
 
-namespace VSIXProject1
+namespace RPAWriter2
 {
     /// <summary>
     /// Command handler
@@ -22,7 +22,7 @@ namespace VSIXProject1
         /// <summary>
         /// Command menu group (command set GUID).
         /// </summary>
-        public static readonly Guid CommandSet = new Guid("dbb3fb04-5958-4b49-a4fe-7ff288479950");
+        public static readonly Guid CommandSet = new Guid("d648562d-8124-4a1f-9574-4874fa421738");
 
         /// <summary>
         /// VS Package that provides this command, not null.

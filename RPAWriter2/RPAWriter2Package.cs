@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace VSIXProject1
+namespace RPAWriter2
 {
     /// <summary>
     /// This is the class that implements the package exposed by this assembly.
@@ -24,14 +24,15 @@ namespace VSIXProject1
     /// </para>
     /// </remarks>
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [Guid(VSIXProject1Package.PackageGuidString)]
+    [Guid(RPAWriter2Package.PackageGuidString)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
-    public sealed class VSIXProject1Package : AsyncPackage
+    [ProvideToolWindow(typeof(ToolWindow1))]
+    public sealed class RPAWriter2Package : AsyncPackage
     {
         /// <summary>
-        /// VSIXProject1Package GUID string.
+        /// RPAWriter2Package GUID string.
         /// </summary>
-        public const string PackageGuidString = "db932699-9c2c-4c3c-89de-5c1eb61643da";
+        public const string PackageGuidString = "a0fa18cb-df97-4047-870b-e9b052173a09";
 
         #region Package Members
 
@@ -48,6 +49,7 @@ namespace VSIXProject1
             // Do any initialization that requires the UI thread after switching to the UI thread.
             await this.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
             await Command1.InitializeAsync(this);
+            await ToolWindow1Command.InitializeAsync(this);
         }
 
         #endregion
