@@ -5,6 +5,9 @@ using System;
 using RPAWriter.Core.Contracts;
 using RPAWriter.Core.Services;
 using RPAWriter2.Services;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
+using EnvDTE80;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Linq;
@@ -24,12 +27,14 @@ namespace RPAWriter2
         private SettingsData _settings;
         private IAiProvider _ai;
         private SpecModel _currentSpec;
+        private IBuildFeedbackService _buildFeedback;
 
         public ToolWindow1Control()
         {
             this.InitializeComponent();
             LoadSettings();
             RecreateAiProvider();
+            _buildFeedback = new BuildFeedbackService();
             AppendChat("Агент готов. Провайдер: " + (_ai is StubAiProvider ? "заглушка (офлайн)" : "OpenAI-совместимый"));
         }
 
@@ -219,6 +224,22 @@ namespace RPAWriter2
                 var added = await service.BuildFromRobotDocsAsync(dlg.FileNames, "");
                 SetOutput("Добавлено решений в базу знаний: " + added);
                 AppendChat("База знаний пополнена: " + added + " решений.");
+            }
+            catch (Exception ex) { ShowError(ex); }
+        }
+
+        private async void OnBuildRelease(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dte = Package.GetGlobalService(typeof(SDTE)) as DTE2;
+                if (dte?.Solution == null || !dte.Solution.IsOpen)
+                {
+                    ShowNotice("Нет открытого решения. Откройте решение и повторите.");
+                    return;
+                }
+                await _buildFeedback.BuildReleaseAsync();
+                AppendChat("Сборка Release запущена.");
             }
             catch (Exception ex) { ShowError(ex); }
         }
