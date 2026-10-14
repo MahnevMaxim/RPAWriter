@@ -2,30 +2,36 @@
 
 ## 1. Обзор
 
-**RPAWriter** — VSIX-расширение для Visual Studio 2026 (18.x), которое помогает писать RPA-роботов на базе Windows Workflow Foundation (WF) с использованием AI-агента.
+**RPAWriter** — VSIX-расширение для Visual Studio, которое помогает писать RPA-роботов на базе Windows Workflow Foundation (WF) с использованием AI-агента.
 
-Агент умеет:
+Агент умеет (реализовано):
 
-- читать технические задания (ТЗ) из **Word** и **Excel**;
-- получать **доступ к логам** (локальным и удалённым);
-- **искать по другим ТЗ** похожие задачи и предлагать решения на базе аналогичных роботов;
-- читать **ошибки компиляции** и **окно вывода VS**;
+- читать технические задания (ТЗ) из **Word** (`.docx`) и **Excel** (`.xlsx`), а также текст (`.txt`) и markdown (`.md`);
+- **искать по базе знаний** похожие задачи и предлагать решения на базе аналогичных роботов;
+- работать в режиме **формирования базы знаний** (читать документацию роботов, разбивать её на мелкие задачи и находить решение по каждой задаче в коде робота);
 - собирать проект в **Release за один клик**;
-- скачивать и анализировать **логи с удалённых серверов** по заданному роботу;
-- работать в режиме **формирования базы знаний** (читать документацию соседних роботов, разбивать её на мелкие задачи и находить решение по каждой задаче в коде робота);
-- **переводить роботов с UiPath на чистый Workflow Foundation** (XAML → WF).
+- анализировать **логи** (локальные файлы);
+- **переводить роботов с UiPath на Workflow Foundation** (XAML → WF);
+- общаться с агентом в **свободном чате**.
+
+В планах (см. § 13 «Необходимые доработки»):
+
+- читать legacy-документы `.doc`/`.xls`;
+- скачивать и анализировать **логи с удалённых серверов**;
+- читать локальные логи **ActivityLog / Event Log**;
+- читать **ошибки компиляции** и **окно вывода VS** и исправлять код по ним.
 
 ## 2. Ключевые решения
 
 | Вопрос | Решение |
 |---|---|
-| Целевая платформа | Visual Studio 2026 (18.x), VSIX на `net472` |
+| Целевая платформа | Visual Studio, VSIX на `net472` |
 | Workflow Foundation | `System.Activities` (`net472`) |
 | Формат вывода агента | **только два пути**: XAML и C#-код, вызываемый через XAML |
 | AI-провайдер | **OpenAI-совместимый** (BaseUrl/Key/Model), заглушка как офлайн-фолбэк |
-| Чтение документов | Open XML SDK (`.docx`/`.xlsx`), NPOI для legacy (`.doc`/`.xls`) |
-| База знаний | локальный каталог, без БД/векторного хранилища |
-| Сходство задач | сначала токенное (TF-IDF/BM25), позже эмбеддинги |
+| Чтение документов | Open XML SDK (`.docx`/`.xlsx`); `.txt`/`.md` — как текст |
+| База знаний | локальный каталог (JSON-индекс), без БД/векторного хранилища |
+| Сходство задач | токенное (Jaccard) с бустами за тип активности/действие |
 | Удалённые логи | контракт + заглушка, транспорт подключается позже |
 
 ## 3. Формат вывода агента (строго два пути)
@@ -35,23 +41,22 @@
 ### 3.1. XAML (workflow)
 Определение workflow из **стандартных** активностей WF:
 
-- управляющие: `Sequence`, `Flowchart`, `If`, `While`, `ForEach`;
+- управляющие: `Sequence`, `If`, `While`, `ForEach`;
 - передача данных: **`Assign`** (значения в переменные/аргументы);
-- вызов кода: **`InvokeMethod`** (метод C#-класса, `Result` → переменная);
-- прочее: `WriteLine`, `Delay` и т.п.
+- вызов кода: **`InvokeMethod`** (метод C#-класса);
+- прочее: `WriteLine`, `Delay`.
 
 Переменные/аргументы объявляются в XAML (`Variable`/`Argument`).
 
 ### 3.2. C#-код, запускаемый через XAML
 Обычные классы с методами (бизнес-логика/действия), которые XAML вызывает через стандартную активность **`InvokeMethod`**, а данные передаёт через **`Assign`**.
 
-Пример:
+Сейчас генератор создаёт методы-заглушки без параметров:
 
 ```csharp
 public static class RpaActions
 {
-    public static void OpenBrowser(string url) { /* ... */ }
-    public static string ReadTable(string path) { /* ... */ }
+    public static void OpenBrowser() { /* TODO: implement */ }
 }
 ```
 
@@ -63,44 +68,45 @@ public static class RpaActions
 
 | Интерфейс | Назначение |
 |---|---|
-| `IAiProvider` | анализ ТЗ, декомпозиция на задачи, маппинг задачи на решение, генерация робота |
-| `IDocumentReader` | чтение Word/Excel → `SpecModel` |
+| `IAiProvider` | анализ ТЗ, декомпозиция на задачи, маппинг задачи на решение, генерация робота, чат |
+| `IDocumentReader` | чтение Word/Excel/текста → `SpecModel` |
 | `IKnowledgeBase` | добавление/поиск похожих задач, получение решения |
-| `ILogAccessService` | локальные логи (ActivityLog, Event Log, файлы) |
+| `ILogAccessService` | локальные логи (файлы) |
 | `IRemoteLogService` | скачивание и анализ удалённых логов |
 | `IBuildFeedbackService` | 1-клик Release-сборка, ошибки компиляции, окно вывода |
 | `IRobotGenerator` | `EmitWorkflowXaml(plan)` + `EmitHelperCode(plan)` |
+| `IUiPathConverter` | конвертация UiPath (XAML) → `RobotPlan` |
 
 ### 4.2. Сервисы
 
 - `OpenAiCompatibleProvider` — реализация `IAiProvider` через `POST {BaseUrl}/chat/completions` (OpenAI / Azure OpenAI / Ollama / LM Studio / vLLM).
 - `StubAiProvider` — детерминированная заглушка (офлайн/демо-режим).
-- `OpenXmlDocumentReader` / `NpoiDocumentReader` — чтение документов.
-- `FileKnowledgeBase` + `SimilarityIndex` — хранилище и поиск сходства.
+- `OpenXmlDocumentReader` — чтение документов (`.docx`/`.xlsx`/`.txt`/`.md`).
+- `FileKnowledgeBase` + `SimilarityIndex` — хранилище (JSON-индекс) и поиск сходства.
 - `KnowledgeBaseFormationService` — режим формирования БЗ.
-- `SolutionTemplateEngine` — параметризация решения-аналога под новое ТЗ.
-- `LogAccessService`, `RemoteLogCollector` + `LogAnalyzer` — работа с логами.
-- `BuildFeedbackService` — `IErrorList`, `IVsOutputWindow`, `DTE2.BuildEvents`.
+- `SolutionTemplateEngine` — параметризация решения-аналога (пока не подключён к конвейеру).
+- `LocalLogAccessService`, `RemoteLogService` + `LogAnalyzer` — работа с логами.
+- `BuildFeedbackService` — 1-клик Release-сборка (`DTE2`).
 - `RobotGenerator` — эмиттеры XAML и C#.
+- `UiPathToWfConverter` — конвертация UiPath → WF.
 - `RpaPipelineService` — оркестратор сквозного конвейера.
+- `TextNormalizer` — токенизация и стоп-слова (RU/EN).
 
 ### 4.3. UI: единое окно «RPA Writer»
 
-Расширение предоставляет **одно окно** (`RpaWriterToolWindow` + `RpaWriterControl`), в котором собраны **все** возможности:
+Расширение предоставляет **одно окно** (`ToolWindow1` + `ToolWindow1Control`) с вкладками **«Чат»**, **«ТЗ»** и **«Настройки»**:
 
 - **чат с агентом** — история сообщений + поле ввода;
-- **все кнопки**: «Импорт ТЗ», «Поиск похожих», «Сгенерировать робота», «Сформировать БЗ», «Собрать Release», «Анализ логов», «Конвертировать UiPath → WF»;
-- **настройки прямо в окне** (Base URL, API-ключ, модель, каталог БЗ) с кнопкой «Сохранить» (синхронизированы с Options-страницей);
-- **предпросмотр результата** (сгенерированный XAML/C#, найденные похожие решения, логи).
+- **кнопки** на вкладке «ТЗ»: «Импорт ТЗ», «Поиск похожих», «Сгенерировать робота», «Сформировать БЗ», «Опубликовать» (Release-сборка), «Анализ логов», «UiPath → WF»;
+- **настройки прямо в окне** (Base URL, API-ключ, модель, каталог БЗ) с кнопкой «Сохранить настройки» (хранятся в JSON: `%AppData%\RPAWriter2\settings.json`);
+- **предпросмотр результата** (сгенерированный XAML/C#, найденные похожие решения, сводка по логам).
 
-Меню **Tools → RPAWriter** дополнительно содержит быстрые команды («Собрать Release», «Конвертировать UiPath → WF», «Открыть RPA Writer»).
-
-Options-страница: настройки провайдера и каталог базы знаний (дублирует поля окна).
+Меню **Tools** содержит кнопку **«RPA Writer»**, открывающую это окно.
 
 ## 5. Режимы работы агента
 
 1. **Генерация с нуля** — ТЗ → анализ → XAML + C#.
-2. **Переиспользование по аналогии** — поиск похожих ТЗ → предложение решения из аналогичного робота.
+2. **Переиспользование по аналогии** — поиск похожих ТЗ → предложение решения из аналогичного робота (сейчас решения только собираются в `ReusedSolutions`; параметризация через `SolutionTemplateEngine` — в планах).
 3. **Гибрид** — анализ нового ТЗ + контекст найденных похожих решений.
 4. **Формирование базы знаний** — документация соседних роботов → мелкие задачи → решение в коде робота.
 
@@ -108,15 +114,21 @@ Options-страница: настройки провайдера и катал�
 
 | Модель | Описание |
 |---|---|
-| `SpecModel` | нормализованное ТЗ (шаги, таблицы, входные/выходные данные) |
-| `TaskDescriptor` | атомарная задача: действие, объект, вход/выход, доменные ключи, тип активности |
+| `SpecModel` | нормализованное ТЗ (имя, путь, текст, задачи) |
+| `TaskDescriptor` | атомарная задача: действие, объект, вход/выход, ключевые слова, тип активности |
 | `SpecAnalysis` | результат анализа ТЗ агентом |
-| `RobotPlan` | дерево WF-активностей (`Sequence/If/While/ForEach/Assign/InvokeMethod`) |
+| `ActivityNodeKind` | вид узла workflow (`Sequence/If/While/ForEach/Assign/InvokeMethod/WriteLine/Delay`) |
+| `ActivityNode` | узел плана робота (вид, имя, класс/метод, аргументы, переменная, выражение, дети) |
+| `ArgumentAssignment` | аргумент для `InvokeMethod` (параметр/значение) |
+| `RobotPlan` | дерево WF-активностей |
 | `SimilarTaskMatch` | найденная похожая задача + оценка сходства + объяснение |
 | `SolutionRecord` | задача + решение (XAML/C#-фрагмент) + исходный робот + документация |
 | `RobotDeploymentConfig` | настройки доступа к серверу робота (транспорт, креды, пути к логам) |
-| `BuildError` | ошибка/предупреждение компиляции (код, сообщение, файл, строка) |
+| `BuildError` | ошибка/предупреждение компиляции (код, сообщение, файл, строка, важность) |
 | `LogEntry` | запись лога (метка времени, уровень, источник, сообщение) |
+| `LogAnalysis` | результат анализа логов (записи, ошибки, предупреждения, сводка) |
+| `PipelineResult` | результат сквозного конвейера (ТЗ, анализ, план, XAML, C#, переиспользованное) |
+| `UiPathConversionResult` | результат конвертации UiPath → WF (план, XAML, C#, предупреждения) |
 
 ## 7. Режим формирования базы знаний (детали)
 
@@ -131,63 +143,56 @@ Options-страница: настройки провайдера и катал�
 
 ## 8. Сквозной сценарий работы
 
-1. Импорт ТЗ (Word/Excel) → `SpecModel` + `TaskDescriptor`.
+1. Импорт ТЗ (Word/Excel/текст) → `SpecModel` + `TaskDescriptor`.
 2. Поиск похожих ТЗ в базе знаний → предложение решения по аналогии.
 3. Генерация: XAML (стандартные активности, `InvokeMethod`/`Assign`) + C#-классы.
-4. **1-клик Release-сборка** (`BuildReleaseCommand`).
-5. Агент читает **ошибки компиляции + окно вывода** → исправляет XAML/C# → повторная сборка.
-6. **Кнопка «Скачать и проанализировать логи»** → логи с удалённых серверов → анализ → в контекст агента.
-7. Локальные логи (ActivityLog, Event Log) — также в контекст.
+4. **1-клик Release-сборка** (кнопка «Опубликовать»).
+5. *(в планах)* Агент читает **ошибки компиляции + окно вывода** → исправляет XAML/C# → повторная сборка.
+6. *(в планах)* **Кнопка «Скачать и проанализировать логи»** → логи с удалённых серверов → анализ → в контекст агента.
+7. *(в планах)* Локальные логи (ActivityLog, Event Log) — также в контекст.
 
-## 9. Целевая структура проекта
+## 9. Структура проекта
 
 ```
-RPAWriter/
-  RPAWriter.csproj                    (net472, VSIX)
-  source.extension.vsixmanifest
-  RPAWriterPackage.cs
-  Commands/
-    ImportSpecCommand.cs
-    FindSimilarCommand.cs
-    GenerateRobotCommand.cs
-    FormKnowledgeBaseCommand.cs
-    BuildReleaseCommand.cs
-    DownloadAnalyzeLogsCommand.cs
-    ShowLogsCommand.cs
-    ShowRpaWriterCommand.cs
-  ToolWindows/
-    RpaWriterToolWindow.cs
-    RpaWriterControl.cs
-  Contracts/
-    IAiProvider.cs
-    IDocumentReader.cs
-    IKnowledgeBase.cs
-    ILogAccessService.cs
-    IRemoteLogService.cs
-    IBuildFeedbackService.cs
-    IRobotGenerator.cs
-  Models/
-    SpecModel.cs, TaskDescriptor.cs, SpecAnalysis.cs,
-    RobotPlan.cs, SimilarTaskMatch.cs, SolutionRecord.cs,
-    RobotDeploymentConfig.cs, BuildError.cs, LogEntry.cs
+RPAWriter.slnx
+RPAWriter.Core/                         (netstandard2.0 — контракты, модели, сервисы)
+  RPAWriter.Core.csproj
+  Contracts/Contracts.cs
+  Models/Models.cs
   Services/
     OpenAiCompatibleProvider.cs
     StubAiProvider.cs
     OpenXmlDocumentReader.cs
-    FileKnowledgeBase.cs, SimilarityIndex.cs
+    FileKnowledgeBase.cs
+    SimilarityIndex.cs
     KnowledgeBaseFormationService.cs
     SolutionTemplateEngine.cs
-    LogAccessService.cs, RemoteLogCollector.cs, LogAnalyzer.cs
-    BuildFeedbackService.cs
+    LocalLogAccessService.cs
+    RemoteLogService.cs
+    LogAnalyzer.cs
+    TextNormalizer.cs
     RobotGenerator.cs
+    UiPathToWfConverter.cs
     RpaPipelineService.cs
-  Options/
-    RpaWriterOptionsPage.cs
+RPAWriter2/                             (net472 — VSIX)
+  RPAWriter2.csproj
+  source.extension.vsixmanifest
+  RPAWriter2Package.cs
+  RPAWriter2Package.vsct
+  ToolWindow1.cs
+  ToolWindow1Command.cs
+  ToolWindow1Control.xaml / .xaml.cs
+  Services/
+    AiProviderFactory.cs
+    BuildFeedbackService.cs
+    SettingsStore.cs
+RPAWriter.Tests/                        (тесты)
+  RPAWriter.Tests.csproj
 ```
 
 ## 10. Порядок реализации
 
-1. **VS 2026 (18.x)** + контракты/модели + `OpenAiCompatibleProvider` (+ `StubAiProvider`).
+1. Контракты/модели + `OpenAiCompatibleProvider` (+ `StubAiProvider`).
 2. **Чтение ТЗ** (Word/Excel) → `SpecModel` + `TaskDescriptor`.
 3. **База знаний + `SimilarityIndex`** (поиск похожих).
 4. **Режим формирования БЗ** (`KnowledgeBaseFormationService`).
@@ -201,19 +206,28 @@ RPAWriter/
 
 `IUiPathConverter` / `UiPathToWfConverter` читает UiPath `.xaml` и строит `RobotPlan`:
 
-- **стандартные активности** (`Sequence`, `Flowchart`, `If`, `While`, `DoWhile`, `ForEach`, `Assign`, `Delay`, `WriteLine`) переносятся в соответствующие узлы WF;
-- **UiPath-специфичные активности** (`OpenBrowser`, `TypeInto`, `Click`, `ReadRange`, `WriteRange`, `LogMessage`, …) сопоставляются с `InvokeMethod` на C#-методах класса `RpaActions`, атрибуты (Url/Selector/Text/…) становятся аргументами;
+- **стандартные активности** (`Sequence`, `If`, `While`, `ForEach`, `Assign`, `Delay`, `WriteLine`) переносятся в соответствующие узлы WF; `Flowchart` и `DoWhile` упрощаются до `Sequence`/`While` (с предупреждением);
+- **UiPath-специфичные активности** (`OpenBrowser`, `TypeInto`, `Click`, `ReadRange`, `WriteRange`, `LogMessage`, …) сопоставляются с `InvokeMethod` на C#-методах класса `RpaActions`, атрибуты (Url/Selector/Text/…) становятся аргументами; `LogMessage` → `WriteLine`;
 - переменные/аргументы (`<Variable>`, `<Argument>`) и служебные свойства (`DisplayName`, `x:*`) пропускаются;
 - результат генерируется в XAML + C# через `RobotGenerator` (с диагностикой по упрощённым конструкциям).
 
-Команда в меню: **«Конвертировать UiPath → WF»** — выбирает `.xaml`, создаёт рядом `.wf.xaml` и `.wf.cs`.
+Кнопка **«UiPath → WF»** выбирает `.xaml`, создаёт рядом `.wf.xaml` и `.wf.cs`.
 
 ## 12. Допущения и ограничения
 
 - Роботы исполняются на `net472` (`System.Activities`).
-- База знаний — локальный каталог (`%AppData%\RPAWriter\KnowledgeBase\`), без БД/векторного хранилища.
-- Сходство задач на старте — токенное (TF-IDF/BM25), позже эмбеддинги через `IAiProvider`.
-- На машине разработки нет полной IDE VS 2026 (есть VS 2022 17.13 + Build Tools 2026 18.5) — сборка VSIX возможна, отладка F5 потребует полной VS 2026.
+- База знаний — локальный каталог, задаваемый пользователем (JSON-индекс `index.json`), без БД/векторного хранилища.
+- Сходство задач — токенное (Jaccard) с бустами за тип активности/действие; позже — эмбеддинги через `IAiProvider`.
+- Манифест VSIX целится в `InstallationTarget [17.14, )`; отладка F5 требует полной IDE Visual Studio.
 - Удалённые логи и реальный AI-провайдер реализуются за контрактами, чтобы транспорт/провайдера можно было подключать позже без изменения остального кода.
 
+## 13. Необходимые доработки
 
+- [ ] **Чтение legacy-документов `.doc`/`.xls` (NPOI).** Сейчас `OpenXmlDocumentReader` читает только `.docx/.xlsx/.txt/.md/.markdown`.
+- [ ] **Подключить `SolutionTemplateEngine`.** Сейчас похожие решения только собираются в `ReusedSolutions`, но не параметризуются под новое ТЗ (режим «Переиспользование по аналогии»).
+- [ ] **Скачивание удалённых логов.** `RemoteLogService.DownloadAsync` бросает `NotSupportedException` и не вызывается в UI; «Анализ логов» читает только локальные файлы.
+- [ ] **Чтение локальных логов ActivityLog / Event Log.** `ILogAccessService.ReadLocalLogsAsync` читает только файлы по путям.
+- [ ] **Чтение ошибок компиляции и окна вывода.** `GetCompilationErrorsAsync` и `GetOutputWindowTextAsync` возвращают пустые заглушки (IErrorList/IVsOutputWindow не подключены); цикл «ошибки → исправить → пересобрать» не реализован.
+- [ ] **Поддержка активности `Flowchart`.** В `ActivityNodeKind`/`RobotGenerator` её нет; конвертер UiPath понижает `Flowchart` → `Sequence`.
+- [ ] **Эмитить `Result`/`OutArgument` в `InvokeMethod`** (связь результата с переменной).
+- [ ] **Генерировать C#-методы с параметрами и возвратом.** Сейчас `EmitHelperCode` генерирует `public static void Метод()` без параметров и с `// TODO: implement`.

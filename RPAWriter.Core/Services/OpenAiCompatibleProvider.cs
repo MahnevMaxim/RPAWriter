@@ -18,6 +18,7 @@ namespace RPAWriter.Core.Services
         public string ApiKey { get; set; }
         public string Model { get; set; } = "gpt-4o-mini";
         public double Temperature { get; set; } = 0.2;
+        public int TimeoutSeconds { get; set; } = 300;
         public string SystemPrompt { get; set; } =
             "Ты агент разработки RPA-роботов на Windows Workflow Foundation. " +
             "Отвечай строго валидным JSON без пояснений.";
@@ -43,6 +44,8 @@ namespace RPAWriter.Core.Services
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _http = http ?? throw new ArgumentNullException(nameof(http));
+            if (_options.TimeoutSeconds > 0)
+                _http.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
         }
 
         public async Task<SpecAnalysis> AnalyzeSpecAsync(SpecModel spec, CancellationToken cancellationToken = default)
@@ -142,7 +145,17 @@ namespace RPAWriter.Core.Services
         internal async Task<string> CompleteAsync(string userMessage, string systemPrompt, CancellationToken cancellationToken)
         {
             var request = BuildRequest(userMessage, systemPrompt);
-            using (var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false))
+            HttpResponseMessage response;
+            try
+            {
+                response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            }
+            catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException(
+                    "Превышено время ожидания ответа от AI-провайдера (" + _options.TimeoutSeconds + " с). Проверьте доступность провайдера.");
+            }
+            using (response)
             {
                 response.EnsureSuccessStatusCode();
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -181,6 +194,7 @@ namespace RPAWriter.Core.Services
             };
             if (!string.IsNullOrWhiteSpace(_options.ApiKey))
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
+            request.Headers.ConnectionClose = true;
             return request;
         }
 
