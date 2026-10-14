@@ -19,6 +19,8 @@
         <SolidColorBrush x:Key="Dark.Text" Color="#F1F1F1"/>
         <SolidColorBrush x:Key="Dark.Accent" Color="#264F78"/>
 
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource Dark.Text}"/>
         </Style>
@@ -161,21 +163,51 @@
         <TabItem Header="Чат">
             <Grid>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="3*" MinHeight="60"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="1*" MinHeight="60"/>
                 </Grid.RowDefinitions>
 
-                <TextBox Grid.Row="0" x:Name="ChatBox" IsReadOnly="True"
-                         AcceptsReturn="True" TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                         Margin="0,0,0,4"/>
+                <Border Grid.Row="0" x:Name="CreateRobotPanel" Margin="0,0,0,6"
+                        Background="{StaticResource Dark.Panel}" BorderBrush="{StaticResource Dark.Border}"
+                        BorderThickness="1" CornerRadius="2" Padding="8,6" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Номер робота:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBox x:Name="RobotNumberBox" Width="140" VerticalAlignment="Center" Margin="0,0,8,0"
+                                 PreviewTextInput="OnRobotNumberPreviewTextInput"/>
+                        <Button Content="Создать робота" Click="OnCreateRobot" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
 
-                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                <ScrollViewer Grid.Row="1" x:Name="ChatScroll"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              Margin="0,0,0,4">
+                    <ItemsControl x:Name="ChatList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource Dark.Panel}" CornerRadius="2" Padding="8,6" Margin="0,0,0,4">
+                                    <StackPanel>
+                                        <Expander Header="Размышления" IsExpanded="False"
+                                                  Foreground="{StaticResource Dark.Text}"
+                                                  Visibility="{Binding HasReasoning, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="{Binding Reasoning}" TextWrapping="Wrap"
+                                                       Foreground="#C8C8C8" FontStyle="Italic"/>
+                                        </Expander>
+                                        <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap"
+                                                   Foreground="{StaticResource Dark.Text}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch"
                               VerticalAlignment="Center" ResizeDirection="Rows"
                               ResizeBehavior="PreviousAndNext"/>
 
-                <Grid Grid.Row="2">
+                <Grid Grid.Row="3">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
@@ -202,7 +234,6 @@
                     <Button Content="Импорт ТЗ" Click="OnImportSpec" Margin="0,5,8,0"/>
                     <Button Content="Поиск похожих" Click="OnFindSimilar" Margin="0,5,8,0"/>
                     <Button Content="Сгенерировать робота" Click="OnGenerateRobot" Margin="0,5,8,0"/>
-                    <Button Content="Сформировать БЗ" Click="OnFormKnowledgeBase" Margin="0,5,8,0"/>
                     <Button Content="Опубликовать" Click="OnBuildRelease" Margin="0,5,8,0"/>
                     <Button Content="Анализ логов" Click="OnAnalyzeLogs" Margin="0,5,8,0"/>
                     <Button Content="UiPath → WF" Click="OnConvertUiPath" Margin="0,5,8,0"/>
@@ -212,9 +243,32 @@
                         Visibility="Collapsed">
                     <TextBlock x:Name="NoticeText" Foreground="#FFE3B3" TextWrapping="Wrap"/>
                 </Border>
+                <Border x:Name="ImportProgressPanel" DockPanel.Dock="Top" Background="{StaticResource Dark.Panel}"
+                        BorderBrush="{StaticResource Dark.Border}" BorderThickness="1" CornerRadius="2"
+                        Padding="10,6" Margin="0,0,0,8" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock x:Name="ImportStatusText" Foreground="{StaticResource Dark.Text}" TextWrapping="Wrap"/>
+                        <ProgressBar x:Name="ImportProgress" Height="6" Margin="0,6,0,0" IsIndeterminate="True"
+                                     Foreground="{StaticResource Dark.Accent}"/>
+                    </StackPanel>
+                </Border>
                 <TextBox x:Name="OutputBox" IsReadOnly="True"
                          AcceptsReturn="True" TextWrapping="Wrap"
                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+            </DockPanel>
+        </TabItem>
+
+        <TabItem x:Name="KnowledgeBaseTab" Header="База знаний">
+            <DockPanel>
+                <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <Button Content="Сформировать БЗ" Click="OnFormKnowledgeBase" Margin="0,5,8,0"/>
+                    <Button Content="Обновить" Click="OnRefreshKnowledgeBase" Margin="0,5,8,0"/>
+                </WrapPanel>
+                <TextBlock x:Name="KbStatusText" DockPanel.Dock="Top" Margin="0,0,0,6"
+                           Foreground="#C8C8C8" TextWrapping="Wrap"/>
+                <ListBox x:Name="KbListBox" Background="{StaticResource Dark.Control}"
+                         BorderBrush="{StaticResource Dark.Border}" Foreground="{StaticResource Dark.Text}"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"/>
             </DockPanel>
         </TabItem>
 
@@ -225,6 +279,7 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -244,7 +299,10 @@
                 <TextBlock Grid.Row="3" Grid.Column="0" Text="Каталог БЗ" VerticalAlignment="Center" Margin="0,0,8,4"/>
                 <TextBox Grid.Row="3" Grid.Column="1" x:Name="KbPathBox" Margin="0,0,0,4"/>
 
-                <Button Grid.Row="4" Grid.Column="1" Content="Сохранить настройки" HorizontalAlignment="Left" Margin="0,4,0,0" Click="OnSaveSettings"/>
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Каталог решений роботов" VerticalAlignment="Center" Margin="0,0,8,4"/>
+                <TextBox Grid.Row="4" Grid.Column="1" x:Name="RobotsRootPathBox" Margin="0,0,0,4"/>
+
+                <Button Grid.Row="5" Grid.Column="1" Content="Сохранить настройки" HorizontalAlignment="Left" Margin="0,4,0,0" Click="OnSaveSettings"/>
             </Grid>
         </TabItem>
     </TabControl>

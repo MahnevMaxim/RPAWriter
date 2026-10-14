@@ -6,7 +6,7 @@
 
 Агент умеет (реализовано):
 
-- читать технические задания (ТЗ) из **Word** (`.docx`) и **Excel** (`.xlsx`), а также текст (`.txt`) и markdown (`.md`);
+- читать технические задания (ТЗ) из **Word** (`.docx`/`.doc`) и **Excel** (`.xlsx`/`.xls`), а также текст (`.txt`) и markdown (`.md`/`.markdown`);
 - **искать по базе знаний** похожие задачи и предлагать решения на базе аналогичных роботов;
 - работать в режиме **формирования базы знаний** (читать документацию роботов, разбивать её на мелкие задачи и находить решение по каждой задаче в коде робота);
 - собирать проект в **Release за один клик**;
@@ -16,7 +16,6 @@
 
 В планах (см. § 13 «Необходимые доработки»):
 
-- читать legacy-документы `.doc`/`.xls`;
 - скачивать и анализировать **логи с удалённых серверов**;
 - читать локальные логи **ActivityLog / Event Log**;
 - читать **ошибки компиляции** и **окно вывода VS** и исправлять код по ним.
@@ -29,7 +28,7 @@
 | Workflow Foundation | `System.Activities` (`net472`) |
 | Формат вывода агента | **только два пути**: XAML и C#-код, вызываемый через XAML |
 | AI-провайдер | **OpenAI-совместимый** (BaseUrl/Key/Model), заглушка как офлайн-фолбэк |
-| Чтение документов | Open XML SDK (`.docx`/`.xlsx`); `.txt`/`.md` — как текст |
+| Чтение документов | Open XML SDK (`.docx`/`.xlsx`) + NPOI (legacy `.doc`/`.xls`); `.txt`/`.md` — как текст |
 | База знаний | локальный каталог (JSON-индекс), без БД/векторного хранилища |
 | Сходство задач | токенное (Jaccard) с бустами за тип активности/действие |
 | Удалённые логи | контракт + заглушка, транспорт подключается позже |
@@ -81,7 +80,8 @@ public static class RpaActions
 
 - `OpenAiCompatibleProvider` — реализация `IAiProvider` через `POST {BaseUrl}/chat/completions` (OpenAI / Azure OpenAI / Ollama / LM Studio / vLLM).
 - `StubAiProvider` — детерминированная заглушка (офлайн/демо-режим).
-- `OpenXmlDocumentReader` — чтение документов (`.docx`/`.xlsx`/`.txt`/`.md`).
+- `OpenXmlDocumentReader` — чтение документов (`.docx`/`.xlsx`/`.txt`/`.md`/`.markdown`); legacy `.doc`/`.xls` делегирует в `NpoiDocumentReader`.
+- `NpoiDocumentReader` — чтение legacy-документов (`.doc`/`.xls`) через NPOI.
 - `FileKnowledgeBase` + `SimilarityIndex` — хранилище (JSON-индекс) и поиск сходства.
 - `KnowledgeBaseFormationService` — режим формирования БЗ.
 - `SolutionTemplateEngine` — параметризация решения-аналога (пока не подключён к конвейеру).
@@ -163,6 +163,7 @@ RPAWriter.Core/                         (netstandard2.0 — контракты, 
     OpenAiCompatibleProvider.cs
     StubAiProvider.cs
     OpenXmlDocumentReader.cs
+    NpoiDocumentReader.cs
     FileKnowledgeBase.cs
     SimilarityIndex.cs
     KnowledgeBaseFormationService.cs
@@ -193,7 +194,7 @@ RPAWriter.Tests/                        (тесты)
 ## 10. Порядок реализации
 
 1. Контракты/модели + `OpenAiCompatibleProvider` (+ `StubAiProvider`).
-2. **Чтение ТЗ** (Word/Excel) → `SpecModel` + `TaskDescriptor`.
+2. **Чтение ТЗ** (Word/Excel, вкл. legacy `.doc`/`.xls`) → `SpecModel` + `TaskDescriptor`.
 3. **База знаний + `SimilarityIndex`** (поиск похожих).
 4. **Режим формирования БЗ** (`KnowledgeBaseFormationService`).
 5. **Сборка/выводы**: `BuildFeedbackService` + 1-клик Release.
@@ -220,10 +221,10 @@ RPAWriter.Tests/                        (тесты)
 - Сходство задач — токенное (Jaccard) с бустами за тип активности/действие; позже — эмбеддинги через `IAiProvider`.
 - Манифест VSIX целится в `InstallationTarget [17.14, )`; отладка F5 требует полной IDE Visual Studio.
 - Удалённые логи и реальный AI-провайдер реализуются за контрактами, чтобы транспорт/провайдера можно было подключать позже без изменения остального кода.
+- Legacy `.doc` читается в режиме best-effort: NPOI не поставляет парсер HWPF (Word 97-2003), поэтому текст извлекается из OLE2-контейнера (поток «WordDocument») по флагу Unicode в FIB; `.xls` читается полностью через HSSF.
 
 ## 13. Необходимые доработки
 
-- [ ] **Чтение legacy-документов `.doc`/`.xls` (NPOI).** Сейчас `OpenXmlDocumentReader` читает только `.docx/.xlsx/.txt/.md/.markdown`.
 - [ ] **Подключить `SolutionTemplateEngine`.** Сейчас похожие решения только собираются в `ReusedSolutions`, но не параметризуются под новое ТЗ (режим «Переиспользование по аналогии»).
 - [ ] **Скачивание удалённых логов.** `RemoteLogService.DownloadAsync` бросает `NotSupportedException` и не вызывается в UI; «Анализ логов» читает только локальные файлы.
 - [ ] **Чтение локальных логов ActivityLog / Event Log.** `ILogAccessService.ReadLocalLogsAsync` читает только файлы по путям.

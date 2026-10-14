@@ -132,9 +132,16 @@ namespace RPAWriter.Core.Services
             };
         }
 
-        public async Task<string> ChatAsync(string message, CancellationToken cancellationToken = default)
+        public async Task<ChatResponse> ChatAsync(string message, CancellationToken cancellationToken = default)
         {
-            return await CompleteAsync(message, _options.ChatSystemPrompt, cancellationToken).ConfigureAwait(false);
+            var request = BuildRequest(message, _options.ChatSystemPrompt);
+            var obj = await SendAsync(request, cancellationToken).ConfigureAwait(false);
+            var messageObj = obj["choices"]?[0]?["message"];
+            var content = messageObj?["content"]?.Value<string>();
+            var reasoning = ExtractReasoning(messageObj);
+            if (string.IsNullOrWhiteSpace(content) && string.IsNullOrWhiteSpace(reasoning))
+                throw new InvalidOperationException("Пустой ответ от AI-провайдера.");
+            return new ChatResponse { Answer = content ?? "", Reasoning = reasoning };
         }
 
         internal async Task<string> CompleteAsync(string userMessage, CancellationToken cancellationToken)
@@ -145,6 +152,15 @@ namespace RPAWriter.Core.Services
         internal async Task<string> CompleteAsync(string userMessage, string systemPrompt, CancellationToken cancellationToken)
         {
             var request = BuildRequest(userMessage, systemPrompt);
+            var obj = await SendAsync(request, cancellationToken).ConfigureAwait(false);
+            var content = obj["choices"]?[0]?["message"]?["content"]?.Value<string>();
+            if (string.IsNullOrWhiteSpace(content))
+                throw new InvalidOperationException("Пустой ответ от AI-провайдера.");
+            return content;
+        }
+
+        private async Task<JObject> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
             HttpResponseMessage response;
             try
             {
@@ -159,12 +175,36 @@ namespace RPAWriter.Core.Services
             {
                 response.EnsureSuccessStatusCode();
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                var obj = JObject.Parse(body);
-                var content = obj["choices"]?[0]?["message"]?["content"]?.Value<string>();
-                if (string.IsNullOrWhiteSpace(content))
-                    throw new InvalidOperationException("Пустой ответ от AI-провайдера.");
-                return content;
+                return JObject.Parse(body);
             }
+        }
+
+        /// <summary>
+        /// Достаёт «размышления» модели из сообщения. Поддерживает:
+        /// DeepSeek R1 / Ollama / vLLM — <c>reasoning_content</c>; OpenAI o-серия — <c>reasoning</c>.
+        /// Оба поля могут быть строкой или объектом с <c>content</c>/<c>summary</c>.
+        /// </summary>
+        private static string ExtractReasoning(JToken message)
+        {
+            if (message == null) return null;
+
+            var rc = message["reasoning_content"];
+            if (rc != null)
+                return rc.Type == JTokenType.String ? rc.Value<string>() : ExtractReasoningInner(rc);
+
+            var r = message["reasoning"];
+            if (r != null)
+                return r.Type == JTokenType.String ? r.Value<string>() : ExtractReasoningInner(r);
+
+            return null;
+        }
+
+        private static string ExtractReasoningInner(JToken token)
+        {
+            if (token == null) return null;
+            return token["content"]?.Value<string>()
+                ?? token["summary"]?.Value<string>()
+                ?? token.ToString();
         }
 
         internal HttpRequestMessage BuildRequest(string userMessage)

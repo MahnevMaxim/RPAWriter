@@ -155,4 +155,11 @@ namespace RPAWriter.Core.Models
         public string CSharpCode { get; set; }
         public List<string> Warnings { get; set; } = new List<string>();
     }
+
+    /// <summary>Ответ агента в свободном чате: итоговый текст + «размышления» модели (если провайдер их отдаёт).</summary>
+    public class ChatResponse
+    {
+        public string Reasoning { get; set; }
+        public string Answer { get; set; }
+    }
 }

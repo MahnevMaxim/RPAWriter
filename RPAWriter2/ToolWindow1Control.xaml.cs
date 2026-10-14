@@ -7,6 +7,7 @@ using RPAWriter.Core.Services;
 using RPAWriter2.Services;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using EnvDTE;
 using EnvDTE80;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -15,6 +16,7 @@ using System.Text;
 using Microsoft.Win32;
 using System.IO;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using RPAWriter.Core.Models;
 
 namespace RPAWriter2
@@ -28,13 +30,20 @@ namespace RPAWriter2
         private IAiProvider _ai;
         private SpecModel _currentSpec;
         private IBuildFeedbackService _buildFeedback;
+        private RobotTemplateService _robotTemplate;
+        private DTE2? _dte;
+        private readonly ObservableCollection<ChatMessage> _messages = new ObservableCollection<ChatMessage>();
 
         public ToolWindow1Control()
         {
             this.InitializeComponent();
+            ChatList.ItemsSource = _messages;
             LoadSettings();
             RecreateAiProvider();
             _buildFeedback = new BuildFeedbackService();
+            _robotTemplate = new RobotTemplateService();
+            HookSolutionEvents();
+            UpdateCreateRobotVisibility();
             AppendChat("Агент готов. Провайдер: " + (_ai is StubAiProvider ? "заглушка (офлайн)" : "OpenAI-совместимый"));
         }
 
@@ -45,6 +54,7 @@ namespace RPAWriter2
             ApiKeyBox.Password = _settings.ApiKey ?? "";
             ModelBox.Text = string.IsNullOrWhiteSpace(_settings.Model) ? "gpt-4o-mini" : _settings.Model;
             KbPathBox.Text = _settings.KnowledgeBasePath ?? "";
+            RobotsRootPathBox.Text = _settings.RobotsRootPath ?? "";
         }
 
         private void RecreateAiProvider()
@@ -72,13 +82,18 @@ namespace RPAWriter2
 
         private void AppendChat(string text)
         {
+            AppendChatMessage(new ChatMessage { Role = "system", Text = text });
+        }
+
+        private void AppendChatMessage(ChatMessage message)
+        {
             if (!Dispatcher.CheckAccess())
             {
-                Dispatcher.BeginInvoke(new Action(() => AppendChat(text)));
+                Dispatcher.BeginInvoke(new Action(() => AppendChatMessage(message)));
                 return;
             }
-            ChatBox.AppendText(text + Environment.NewLine);
-            ChatBox.ScrollToEnd();
+            _messages.Add(message);
+            ChatScroll.ScrollToEnd();
         }
 
         private void SetOutput(string text)
@@ -108,6 +123,85 @@ namespace RPAWriter2
             NoticeBar.Visibility = Visibility.Collapsed;
         }
 
+        private void HookSolutionEvents()
+        {
+            try
+            {
+                _dte = Package.GetGlobalService(typeof(SDTE)) as DTE2;
+                if (_dte == null) return;
+                var solEvents = _dte.Events.SolutionEvents;
+                solEvents.Opened += () => UpdateCreateRobotVisibility();
+                solEvents.AfterClosing += () => UpdateCreateRobotVisibility();
+                solEvents.ProjectAdded += p => UpdateCreateRobotVisibility();
+                solEvents.ProjectRemoved += p => UpdateCreateRobotVisibility();
+            }
+            catch
+            {
+                // События решения недоступны — видимость обновим при загрузке/по факту.
+            }
+        }
+
+        private void UpdateCreateRobotVisibility()
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(UpdateCreateRobotVisibility));
+                return;
+            }
+            bool visible;
+            try
+            {
+                var dte = _dte ?? (Package.GetGlobalService(typeof(SDTE)) as DTE2);
+                visible = dte?.Solution == null || !dte.Solution.IsOpen;
+            }
+            catch
+            {
+                visible = true;
+            }
+            CreateRobotPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void ShowImportProgress(string status)
+        {
+            ImportStatusText.Text = status;
+            ImportProgressPanel.Visibility = Visibility.Visible;
+        }
+
+        private void SetImportStatus(string status)
+        {
+            ImportStatusText.Text = status;
+        }
+
+        private void HideImportProgress()
+        {
+            ImportProgressPanel.Visibility = Visibility.Collapsed;
+        }
+
+        /// <summary>Возвращает каталог открытого решения или null, если решение не открыто.</summary>
+        private string? GetOpenSolutionDirectory()
+        {
+            try
+            {
+                var dte = _dte ?? (Package.GetGlobalService(typeof(SDTE)) as DTE2);
+                if (dte?.Solution == null || !dte.Solution.IsOpen)
+                    return null;
+                var slnPath = dte.Solution.FullName;
+                return string.IsNullOrWhiteSpace(slnPath) ? null : Path.GetDirectoryName(slnPath);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>Копирует файл ТЗ в неизменном виде в папку docs в корне решения.</summary>
+        private static void SaveImportedSpec(string sourcePath, string solutionDir)
+        {
+            var docsDir = Path.Combine(solutionDir, "docs");
+            Directory.CreateDirectory(docsDir);
+            File.Copy(sourcePath, Path.Combine(docsDir, Path.GetFileName(sourcePath)), overwrite: true);
+        }
+
 #pragma warning disable VSTHRD100 // обработчики событий WPF — async void
         private async void OnSend(object sender, RoutedEventArgs e)
         {
@@ -126,6 +220,13 @@ namespace RPAWriter2
 
         private async void OnImportSpec(object sender, RoutedEventArgs e)
         {
+            var solutionDir = GetOpenSolutionDirectory();
+            if (solutionDir == null)
+            {
+                ShowNotice("Импорт ТЗ доступен только при открытом решении.");
+                return;
+            }
+
             var dlg = new OpenFileDialog
             {
                 Title = "Выберите ТЗ",
@@ -133,9 +234,13 @@ namespace RPAWriter2
             };
             if (dlg.ShowDialog() != true) return;
 
+            ShowImportProgress("Чтение файла…");
             try
             {
+                SaveImportedSpec(dlg.FileName, solutionDir);
+
                 var spec = new OpenXmlDocumentReader().Read(dlg.FileName);
+                SetImportStatus("Разбор задач (AI)…");
                 var tasks = await _ai.DecomposeTasksAsync(spec.RawText);
                 spec.Tasks = tasks.ToList();
                 _currentSpec = spec;
@@ -156,6 +261,10 @@ namespace RPAWriter2
             catch (Exception ex)
             {
                 ShowError(ex);
+            }
+            finally
+            {
+                HideImportProgress();
             }
         }
 
@@ -287,6 +396,50 @@ namespace RPAWriter2
             }
             catch (Exception ex) { ShowError(ex); }
         }
+        private async void OnCreateRobot(object sender, RoutedEventArgs e)
+        {
+            var number = (RobotNumberBox?.Text ?? "").Trim();
+            if (number.Length == 0 || !number.All(char.IsDigit))
+            {
+                AppendChat("Укажите номер робота (только цифры).");
+                return;
+            }
+
+            var solutionName = "RPA-" + number;
+            try
+            {
+                var result = await _robotTemplate.CreateRobotAsync(solutionName, _settings.RobotsRootPath);
+                if (result.Success)
+                    AppendChat("Робот создан: " + result.SolutionPath);
+                else
+                    AppendChat("Предупреждение: " + result.Message);
+            }
+            catch (Exception ex)
+            {
+                ShowError(ex);
+            }
+        }
+
+        private void OnRobotNumberPreviewTextInput(object sender, TextCompositionEventArgs e)
+        {
+            e.Handled = e.Text.Any(c => !char.IsDigit(c));
+        }
+
+        private async void OnRefreshKnowledgeBase(object sender, RoutedEventArgs e)
+        {
+            var kbPath = RequireKbPath();
+            if (kbPath == null) return;
+            try
+            {
+                var kb = new FileKnowledgeBase(kbPath);
+                var records = await kb.GetAllAsync();
+                var items = records.Select(r => (r.Name ?? "<без имени>") + " — задач: " + (r.Tasks?.Count ?? 0)).ToList();
+                KbListBox.ItemsSource = items;
+                KbStatusText.Text = "Решений в базе знаний: " + records.Count;
+            }
+            catch (Exception ex) { ShowError(ex); }
+        }
+
 #pragma warning restore VSTHRD100
 
         private async Task SendMessageAsync()
@@ -294,11 +447,11 @@ namespace RPAWriter2
             var text = InputBox.Text.Trim();
             if (text.Length == 0) return;
             InputBox.Clear();
-            AppendChat("Вы: " + text);
+            AppendChatMessage(new ChatMessage { Role = "user", Text = text });
             try
             {
-                var reply = await _ai.ChatAsync(text);
-                AppendChat("Агент: " + reply);
+                var response = await _ai.ChatAsync(text);
+                AppendChatMessage(new ChatMessage { Role = "agent", Text = response.Answer, Reasoning = response.Reasoning });
             }
             catch (Exception ex)
             {
@@ -312,6 +465,7 @@ namespace RPAWriter2
             _settings.ApiKey = ApiKeyBox.Password.Trim();
             _settings.Model = ModelBox.Text.Trim();
             _settings.KnowledgeBasePath = KbPathBox.Text.Trim();
+            _settings.RobotsRootPath = RobotsRootPathBox.Text.Trim();
             SettingsStore.Save(_settings);
             RecreateAiProvider();
             AppendChat("Настройки сохранены. Провайдер: " + (_ai is StubAiProvider ? "заглушка (офлайн)" : "OpenAI-совместимый"));

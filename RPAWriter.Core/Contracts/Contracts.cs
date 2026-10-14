@@ -15,8 +15,8 @@ namespace RPAWriter.Core.Contracts
         Task<RobotPlan> GenerateRobotAsync(SpecAnalysis analysis, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<TaskDescriptor>> DecomposeTasksAsync(string text, CancellationToken cancellationToken = default);
         Task<SolutionRecord> MapTaskToSolutionAsync(TaskDescriptor task, string robotCode, CancellationToken cancellationToken = default);
-        /// <summary>Свободный чат с агентом (для UI).</summary>
-        Task<string> ChatAsync(string message, CancellationToken cancellationToken = default);
+        /// <summary>Свободный чат с агентом (для UI). Возвращает ответ и, если провайдер отдаёт, «размышления» модели.</summary>
+        Task<ChatResponse> ChatAsync(string message, CancellationToken cancellationToken = default);
     }
 
     /// <summary>

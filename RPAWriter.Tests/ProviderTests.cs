@@ -103,7 +103,8 @@ namespace RPAWriter.Tests
         public async Task StubAiProvider_ChatAsync_ReturnsText()
         {
             var reply = await new StubAiProvider().ChatAsync("привет");
-            Assert.That(reply, Does.Contain("привет"));
+            Assert.That(reply.Answer, Does.Contain("привет"));
+            Assert.That(reply.Reasoning, Is.Empty);
         }
 
         [Test]
@@ -114,7 +115,34 @@ namespace RPAWriter.Tests
 
             var reply = await provider.ChatAsync("здравствуй");
 
-            Assert.That(reply, Is.EqualTo("Привет, я агент!"));
+            Assert.That(reply.Answer, Is.EqualTo("Привет, я агент!"));
+            Assert.That(reply.Reasoning, Is.Null.Or.Empty);
+        }
+
+        [Test]
+        public async Task OpenAiProvider_ChatAsync_ParsesReasoning()
+        {
+            var payload = new
+            {
+                choices = new[]
+                {
+                    new
+                    {
+                        message = new
+                        {
+                            content = "Ответ",
+                            reasoning_content = "Размышление"
+                        }
+                    }
+                }
+            };
+            var handler = new FakeHttpHandler { Responder = req => JsonSerializer.Serialize(payload) };
+            var provider = new OpenAiCompatibleProvider(new OpenAiOptions(), new HttpClient(handler));
+
+            var reply = await provider.ChatAsync("запрос");
+
+            Assert.That(reply.Answer, Is.EqualTo("Ответ"));
+            Assert.That(reply.Reasoning, Is.EqualTo("Размышление"));
         }
     }
 }

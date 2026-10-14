@@ -2,8 +2,6 @@
 
 Список расхождений между документом `RPAWriter.md` и фактическим кодом (проекты `RPAWriter.Core`, `RPAWriter2`, `RPAWriter.Tests`).
 
-- [ ] **`NpoiDocumentReader` не реализован.** Док (§ 2): «NPOI для legacy (.doc/.xls)». Фактически пакета NPOI нет; `OpenXmlDocumentReader` читает только `.docx/.xlsx/.txt/.md/.markdown`.
-
 - [ ] **`SolutionTemplateEngine` не подключён.** Не используется ни в `RpaPipelineService`, ни в UI — похожие решения (`ReusedSolutions`) только собираются, но не параметризуются (режим «Переиспользование по аналогии», § 5 п.2).
 
 - [ ] **Удалённые логи не подключены.** Док (§ 8 п.6): кнопка скачивает логи с удалённых серверов через `IRemoteLogService`. Фактически `RemoteLogService.DownloadAsync` бросает `NotSupportedException` и в UI не вызывается; «Анализ логов» читает локальные файлы напрямую `LogAnalyzer`.
