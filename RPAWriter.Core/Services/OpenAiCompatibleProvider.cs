@@ -21,6 +21,11 @@ namespace RPAWriter.Core.Services
         public string SystemPrompt { get; set; } =
             "Ты агент разработки RPA-роботов на Windows Workflow Foundation. " +
             "Отвечай строго валидным JSON без пояснений.";
+
+        /// <summary>Промпт для свободного чата (обычный текст, без требования JSON).</summary>
+        public string ChatSystemPrompt { get; set; } =
+            "Ты — ассистент-разработчик RPA-роботов на Windows Workflow Foundation. " +
+            "Отвечай кратко и по делу обычным текстом, без JSON, если явно не попросят.";
     }
 
     /// <summary>
@@ -126,12 +131,17 @@ namespace RPAWriter.Core.Services
 
         public async Task<string> ChatAsync(string message, CancellationToken cancellationToken = default)
         {
-            return await CompleteAsync(message, cancellationToken).ConfigureAwait(false);
+            return await CompleteAsync(message, _options.ChatSystemPrompt, cancellationToken).ConfigureAwait(false);
         }
 
         internal async Task<string> CompleteAsync(string userMessage, CancellationToken cancellationToken)
         {
-            var request = BuildRequest(userMessage);
+            return await CompleteAsync(userMessage, _options.SystemPrompt, cancellationToken).ConfigureAwait(false);
+        }
+
+        internal async Task<string> CompleteAsync(string userMessage, string systemPrompt, CancellationToken cancellationToken)
+        {
+            var request = BuildRequest(userMessage, systemPrompt);
             using (var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false))
             {
                 response.EnsureSuccessStatusCode();
@@ -146,9 +156,14 @@ namespace RPAWriter.Core.Services
 
         internal HttpRequestMessage BuildRequest(string userMessage)
         {
+            return BuildRequest(userMessage, _options.SystemPrompt);
+        }
+
+        internal HttpRequestMessage BuildRequest(string userMessage, string systemPrompt)
+        {
             var messages = new List<object>
             {
-                new { role = "system", content = _options.SystemPrompt },
+                new { role = "system", content = systemPrompt },
                 new { role = "user", content = userMessage }
             };
             var payload = new

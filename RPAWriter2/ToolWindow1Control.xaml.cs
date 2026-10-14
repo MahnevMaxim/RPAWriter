@@ -1,34 +1,154 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Windows;
 using System.Windows.Controls;
+using System;
+using RPAWriter.Core.Contracts;
+using RPAWriter.Core.Services;
+using RPAWriter2.Services;
+using System.Threading.Tasks;
+using System.Windows.Input;
+using System.Linq;
+using System.Text;
+using Microsoft.Win32;
+using RPAWriter.Core.Models;
 
 namespace RPAWriter2
 {
     /// <summary>
-    /// Interaction logic for ToolWindow1Control.
+    /// Единое окно расширения: чат с агентом и настройки.
     /// </summary>
     public partial class ToolWindow1Control : UserControl
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ToolWindow1Control"/> class.
-        /// </summary>
+        private SettingsData _settings;
+        private IAiProvider _ai;
+        private SpecModel _currentSpec;
+
         public ToolWindow1Control()
         {
             this.InitializeComponent();
+            LoadSettings();
+            RecreateAiProvider();
+            AppendChat("Агент готов. Провайдер: " + (_ai is StubAiProvider ? "заглушка (офлайн)" : "OpenAI-совместимый"));
         }
 
-        /// <summary>
-        /// Handles click on the button by displaying a message box.
-        /// </summary>
-        /// <param name="sender">The event sender.</param>
-        /// <param name="e">The event args.</param>
-        [SuppressMessage("Microsoft.Globalization", "CA1300:SpecifyMessageBoxOptions", Justification = "Sample code")]
-        [SuppressMessage("StyleCop.CSharp.NamingRules", "SA1300:ElementMustBeginWithUpperCaseLetter", Justification = "Default event handler naming pattern")]
-        private void button1_Click(object sender, RoutedEventArgs e)
+        private void LoadSettings()
         {
-            MessageBox.Show(
-                string.Format(System.Globalization.CultureInfo.CurrentUICulture, "Invoked '{0}'", this.ToString()),
-                "ToolWindow1");
+            _settings = SettingsStore.Load();
+            BaseUrlBox.Text = string.IsNullOrWhiteSpace(_settings.BaseUrl) ? "https://api.openai.com/v1" : _settings.BaseUrl;
+            ApiKeyBox.Password = _settings.ApiKey ?? "";
+            ModelBox.Text = string.IsNullOrWhiteSpace(_settings.Model) ? "gpt-4o-mini" : _settings.Model;
+            KbPathBox.Text = _settings.KnowledgeBasePath ?? "";
+        }
+
+        private void RecreateAiProvider()
+        {
+            _ai = AiProviderFactory.Create(_settings);
+        }
+
+        private void AppendChat(string text)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(() => AppendChat(text)));
+                return;
+            }
+            ChatBox.AppendText(text + Environment.NewLine);
+            ChatBox.ScrollToEnd();
+        }
+
+        private void SetOutput(string text)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(() => SetOutput(text)));
+                return;
+            }
+            OutputBox.Text = text;
+        }
+
+        private void ShowError(Exception ex)
+        {
+            AppendChat("Ошибка: " + ex.Message);
+            SetOutput(ex.ToString());
+        }
+
+#pragma warning disable VSTHRD100 // обработчики событий WPF — async void
+        private async void OnSend(object sender, RoutedEventArgs e)
+        {
+            await SendMessageAsync();
+        }
+
+        private async void OnInputKeyDown(object sender, KeyEventArgs e)
+        {
+            // Enter — отправить; Ctrl+Enter — перевод строки (обрабатывает сам TextBox)
+            if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None)
+            {
+                e.Handled = true;
+                await SendMessageAsync();
+            }
+        }
+
+        private async void OnImportSpec(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Title = "Выберите ТЗ",
+                Filter = "ТЗ (*.docx;*.xlsx;*.txt;*.md)|*.docx;*.xlsx;*.txt;*.md|Все файлы (*.*)|*.*"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            try
+            {
+                var spec = new OpenXmlDocumentReader().Read(dlg.FileName);
+                var tasks = await _ai.DecomposeTasksAsync(spec.RawText);
+                spec.Tasks = tasks.ToList();
+                _currentSpec = spec;
+
+                var sb = new StringBuilder();
+                sb.AppendLine("ТЗ: " + spec.Name);
+                sb.AppendLine();
+                sb.AppendLine(spec.RawText);
+                sb.AppendLine();
+                sb.AppendLine("Задач: " + spec.Tasks.Count);
+                foreach (var t in spec.Tasks)
+                    sb.AppendLine("- " + (t.Action ?? "") + " → " + (t.Target ?? "") + " [" + (t.ActivityType ?? "") + "]");
+                SetOutput(sb.ToString());
+
+                AppendChat("Импортировано ТЗ: " + spec.Name + " (задач: " + spec.Tasks.Count + ")");
+            }
+            catch (Exception ex)
+            {
+                ShowError(ex);
+            }
+        }
+#pragma warning restore VSTHRD100
+
+        private async Task SendMessageAsync()
+        {
+            var text = InputBox.Text.Trim();
+            if (text.Length == 0) return;
+            InputBox.Clear();
+            AppendChat("Вы: " + text);
+            try
+            {
+                var reply = await _ai.ChatAsync(text);
+                AppendChat("Агент: " + reply);
+            }
+            catch (Exception ex)
+            {
+                AppendChat("Ошибка: " + ex.Message);
+            }
+        }
+
+        private void OnSaveSettings(object sender, RoutedEventArgs e)
+        {
+            _settings.BaseUrl = BaseUrlBox.Text.Trim();
+            _settings.ApiKey = ApiKeyBox.Password.Trim();
+            _settings.Model = ModelBox.Text.Trim();
+            _settings.KnowledgeBasePath = KbPathBox.Text.Trim();
+            SettingsStore.Save(_settings);
+            RecreateAiProvider();
+            AppendChat("Настройки сохранены. Провайдер: " + (_ai is StubAiProvider ? "заглушка (офлайн)" : "OpenAI-совместимый"));
         }
     }
 }

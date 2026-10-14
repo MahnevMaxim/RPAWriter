@@ -4,15 +4,237 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vsshell="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0"
-             Background="{DynamicResource {x:Static vsshell:VsBrushes.WindowKey}}"
-             Foreground="{DynamicResource {x:Static vsshell:VsBrushes.WindowTextKey}}"
+             Background="#2D2D30"
+             Foreground="#F1F1F1"
              mc:Ignorable="d"
              d:DesignHeight="300" d:DesignWidth="300"
              Name="MyToolWindow">
-    <Grid>
-        <StackPanel Orientation="Vertical">
-            <TextBlock Margin="10" HorizontalAlignment="Center">ToolWindow1</TextBlock>
-            <Button Content="Click me!" Click="button1_Click" Width="120" Height="80" Name="button1"/>
-        </StackPanel>
-    </Grid>
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="Dark.Window" Color="#2D2D30"/>
+        <SolidColorBrush x:Key="Dark.Panel" Color="#252526"/>
+        <SolidColorBrush x:Key="Dark.Control" Color="#333337"/>
+        <SolidColorBrush x:Key="Dark.ControlHover" Color="#3E3E42"/>
+        <SolidColorBrush x:Key="Dark.ControlPressed" Color="#264F78"/>
+        <SolidColorBrush x:Key="Dark.Border" Color="#3F3F46"/>
+        <SolidColorBrush x:Key="Dark.Text" Color="#F1F1F1"/>
+        <SolidColorBrush x:Key="Dark.Accent" Color="#264F78"/>
+
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Dark.Text}"/>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource Dark.Control}"/>
+            <Setter Property="Foreground" Value="{StaticResource Dark.Text}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Dark.Border}"/>
+            <Setter Property="CaretBrush" Value="{StaticResource Dark.Text}"/>
+            <Setter Property="SelectionBrush" Value="{StaticResource Dark.Accent}"/>
+            <Setter Property="Padding" Value="4,2"/>
+        </Style>
+
+        <Style TargetType="PasswordBox">
+            <Setter Property="Background" Value="{StaticResource Dark.Control}"/>
+            <Setter Property="Foreground" Value="{StaticResource Dark.Text}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Dark.Border}"/>
+            <Setter Property="CaretBrush" Value="{StaticResource Dark.Text}"/>
+            <Setter Property="SelectionBrush" Value="{StaticResource Dark.Accent}"/>
+            <Setter Property="Padding" Value="4,2"/>
+        </Style>
+
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource Dark.Text}"/>
+            <Setter Property="Background" Value="{StaticResource Dark.Control}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Dark.Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="2" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Dark.ControlHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Dark.ControlPressed}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="IconButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource Dark.Text}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="4"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.7"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.3"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="GridSplitter">
+            <Setter Property="Background" Value="{StaticResource Dark.Border}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridSplitter">
+                        <Border Background="{TemplateBinding Background}"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="TabControl">
+            <Setter Property="Background" Value="{StaticResource Dark.Panel}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Dark.Border}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid KeyboardNavigation.TabNavigation="Local">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TabPanel Grid.Row="0" Panel.ZIndex="1" IsItemsHost="True" Background="Transparent"/>
+                            <Border Grid.Row="1" Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="0,1,0,0">
+                                <ContentPresenter ContentSource="SelectedContent"/>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="{StaticResource Dark.Text}"/>
+            <Setter Property="Background" Value="{StaticResource Dark.Control}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Dark.Border}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
+                                CornerRadius="2,2,0,0" Padding="14,6" Margin="0,0,2,0">
+                            <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Dark.Panel}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Dark.Accent}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Dark.ControlHover}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+    <DockPanel Margin="8">
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <Button Content="Импорт ТЗ" Click="OnImportSpec" Margin="0,0,8,0"/>
+        </WrapPanel>
+        <TabControl>
+        <TabItem Header="Чат">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="3*" MinHeight="60"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="1*" MinHeight="60"/>
+                </Grid.RowDefinitions>
+
+                <TextBox Grid.Row="0" x:Name="ChatBox" IsReadOnly="True"
+                         AcceptsReturn="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                         Margin="0,0,0,4"/>
+
+                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                              VerticalAlignment="Center" ResizeDirection="Rows"
+                              ResizeBehavior="PreviousAndNext"/>
+
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" x:Name="InputBox"
+                             AcceptsReturn="True" TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             PreviewKeyDown="OnInputKeyDown"/>
+                    <Button Grid.Column="1" Width="28" Height="28"
+                            Margin="8,0,0,0" VerticalAlignment="Bottom" Click="OnSend"
+                            Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Отправить (Enter)">
+                        <Path Data="M 2,21 L 23,12 L 2,3 L 2,10 L 17,12 L 2,14 L 2,21 Z"
+                              Fill="{StaticResource Dark.Text}" Stretch="Uniform"
+                              Width="18" Height="18"/>
+                    </Button>
+                </Grid>
+            </Grid>
+        </TabItem>
+
+        <TabItem Header="Результат">
+            <TextBox x:Name="OutputBox" IsReadOnly="True"
+                     AcceptsReturn="True" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+        </TabItem>
+
+        <TabItem Header="Настройки">
+            <Grid Margin="8" VerticalAlignment="Top">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Base URL" VerticalAlignment="Center" Margin="0,0,8,4"/>
+                <TextBox Grid.Row="0" Grid.Column="1" x:Name="BaseUrlBox" Margin="0,0,0,4"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="API-ключ" VerticalAlignment="Center" Margin="0,0,8,4"/>
+                <PasswordBox Grid.Row="1" Grid.Column="1" x:Name="ApiKeyBox" Margin="0,0,0,4"/>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Модель" VerticalAlignment="Center" Margin="0,0,8,4"/>
+                <TextBox Grid.Row="2" Grid.Column="1" x:Name="ModelBox" Margin="0,0,0,4"/>
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Каталог БЗ" VerticalAlignment="Center" Margin="0,0,8,4"/>
+                <TextBox Grid.Row="3" Grid.Column="1" x:Name="KbPathBox" Margin="0,0,0,4"/>
+
+                <Button Grid.Row="4" Grid.Column="1" Content="Сохранить настройки" HorizontalAlignment="Left" Margin="0,4,0,0" Click="OnSaveSettings"/>
+            </Grid>
+        </TabItem>
+        </TabControl>
+    </DockPanel>
 </UserControl>
