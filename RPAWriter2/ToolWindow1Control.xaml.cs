@@ -198,6 +198,30 @@ namespace RPAWriter2
             }
             catch (Exception ex) { ShowError(ex); }
         }
+
+        private async void OnFormKnowledgeBase(object sender, RoutedEventArgs e)
+        {
+            var kbPath = RequireKbPath();
+            if (kbPath == null) return;
+
+            var dlg = new OpenFileDialog
+            {
+                Title = "Документация роботов",
+                Filter = "Документация (*.docx;*.txt;*.md)|*.docx;*.txt;*.md|Все файлы (*.*)|*.*",
+                Multiselect = true
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            try
+            {
+                var kb = new FileKnowledgeBase(kbPath);
+                var service = new KnowledgeBaseFormationService(new OpenXmlDocumentReader(), _ai, kb);
+                var added = await service.BuildFromRobotDocsAsync(dlg.FileNames, "");
+                SetOutput("Добавлено решений в базу знаний: " + added);
+                AppendChat("База знаний пополнена: " + added + " решений.");
+            }
+            catch (Exception ex) { ShowError(ex); }
+        }
 #pragma warning restore VSTHRD100
 
         private async Task SendMessageAsync()

@@ -202,6 +202,7 @@
                     <Button Content="Импорт ТЗ" Click="OnImportSpec" Margin="0,5,8,0"/>
                     <Button Content="Поиск похожих" Click="OnFindSimilar" Margin="0,5,8,0"/>
                     <Button Content="Сгенерировать робота" Click="OnGenerateRobot" Margin="0,5,8,0"/>
+                    <Button Content="Сформировать БЗ" Click="OnFormKnowledgeBase" Margin="0,5,8,0"/>
                 </WrapPanel>
                 <Border x:Name="NoticeBar" DockPanel.Dock="Top" Background="#4DFF8C00"
                         CornerRadius="2" Padding="10,6" Margin="0,0,0,8"
