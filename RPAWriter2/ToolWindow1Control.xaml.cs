@@ -409,7 +409,9 @@ namespace RPAWriter2
             var solutionName = "RPA-" + number;
             try
             {
-                var result = await _robotTemplate.CreateRobotAsync(solutionName, _settings.RobotsRootPath, _settings.RobotTemplateName);
+                var result = await _robotTemplate.CreateRobotAsync(
+                    solutionName, _settings.RobotsRootPath, _settings.RobotTemplateName,
+                    progress: new Progress<string>(AppendChat));
                 if (result.Success)
                     AppendChat("Робот создан: " + result.SolutionPath);
                 else

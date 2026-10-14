@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EnvDTE80;
@@ -24,7 +26,9 @@ namespace RPAWriter2.Services
     public class RobotTemplateService
     {
         public async Task<RobotCreateResult> CreateRobotAsync(
-            string solutionName, string rootPath, string templateName, CancellationToken cancellationToken = default)
+            string solutionName, string rootPath, string templateName,
+            IProgress<string>? progress = null,
+            CancellationToken cancellationToken = default)
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
@@ -49,15 +53,23 @@ namespace RPAWriter2.Services
             if (string.IsNullOrWhiteSpace(templateName))
                 return Fail("Не задано название шаблона робота (настройка «Название файла шаблона робота»).");
 
-            var templatePath = FindTemplate(templateName);
+            var name = templateName.Trim();
+            Report(progress, "Поиск шаблона «" + name + "»…");
+
+            var templatePath = FindTemplate(name, progress);
             if (templatePath == null)
-                return Fail("Шаблон решения \"" + templateName.Trim() + "\" не найден. Установите шаблон и повторите.");
+                return Fail("Шаблон решения \"" + name + "\" не найден. Установите шаблон и повторите.");
+
+            var vstPath = ResolveVstemplate(templatePath, progress);
+            if (vstPath == null)
+                return Fail("В шаблоне \"" + name + "\" не найден файл .vstemplate.");
 
             try
             {
                 Directory.CreateDirectory(destDir);
                 solution.Create(destDir, solutionName);
-                solution.AddFromTemplate(templatePath, destDir, solutionName, false);
+                Report(progress, "Создаю проект из шаблона: " + vstPath);
+                solution.AddFromTemplate(vstPath, destDir, solutionName, false);
                 solution.SaveAs(slnFile);
                 return new RobotCreateResult { Success = true, Message = "Решение создано.", SolutionPath = slnFile };
             }
@@ -93,7 +105,7 @@ namespace RPAWriter2.Services
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "source", "repos");
         }
 
-        private static string? FindTemplate(string name)
+        private static string? FindTemplate(string name, IProgress<string>? progress)
         {
             name = (name ?? "").Trim();
             if (name.Length == 0) return null;
@@ -117,6 +129,8 @@ namespace RPAWriter2.Services
                 if (Directory.Exists(ide)) roots.Add(ide);
             }
 
+            Report(progress, "Каталоги для поиска: " + (roots.Count == 0 ? "не найдены" : string.Join("; ", roots)));
+
             // Имя может быть задано с расширением (.zip/.vstemplate) или без него.
             var hasExtension = name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
                                || name.EndsWith(".vstemplate", StringComparison.OrdinalIgnoreCase);
@@ -124,22 +138,78 @@ namespace RPAWriter2.Services
 
             foreach (var root in roots)
             {
+                Report(progress, "Проверяю каталог: " + root);
+
                 // 1) Прямой файл-шаблон (.vstemplate или .zip) с подходящим именем (рекурсивно).
                 foreach (var f in SafeEnumerateFiles(root, "*.vstemplate", SearchOption.AllDirectories))
-                    if (MatchesName(f, name, baseName, hasExtension)) return f;
+                    if (MatchesName(f, name, baseName, hasExtension))
+                    {
+                        Report(progress, "Найден файл шаблона: " + f);
+                        return f;
+                    }
                 foreach (var f in SafeEnumerateFiles(root, "*.zip", SearchOption.AllDirectories))
-                    if (MatchesName(f, name, baseName, hasExtension)) return f;
+                    if (MatchesName(f, name, baseName, hasExtension))
+                    {
+                        Report(progress, "Найден файл шаблона: " + f);
+                        return f;
+                    }
 
                 // 2) Каталог с именем шаблона, внутри которого лежит .vstemplate (или .zip).
                 foreach (var dir in SafeEnumerateDirectories(root, baseName, SearchOption.AllDirectories))
                 {
                     foreach (var vst in SafeEnumerateFiles(dir, "*.vstemplate", SearchOption.TopDirectoryOnly))
+                    {
+                        Report(progress, "Найден файл шаблона: " + vst);
                         return vst;
+                    }
                     foreach (var zip in SafeEnumerateFiles(dir, "*.zip", SearchOption.TopDirectoryOnly))
+                    {
+                        Report(progress, "Найден файл шаблона: " + zip);
                         return zip;
+                    }
                 }
             }
             return null;
+        }
+
+        private static void Report(IProgress<string>? progress, string message)
+        {
+            progress?.Report(message);
+        }
+
+        /// <summary>
+        /// Возвращает путь к файлу .vstemplate. Если найден шаблон-архив (.zip),
+        /// распаковывает его во временный каталог и возвращает .vstemplate изнутри.
+        /// </summary>
+        private static string? ResolveVstemplate(string templatePath, IProgress<string>? progress)
+        {
+            if (templatePath.EndsWith(".vstemplate", StringComparison.OrdinalIgnoreCase))
+                return templatePath;
+
+            if (!templatePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            Report(progress, "Шаблон упакован в .zip, распаковываю: " + templatePath);
+
+            var extractDir = Path.Combine(Path.GetTempPath(), "RPAWriter2", "Templates",
+                Path.GetFileNameWithoutExtension(templatePath));
+            try
+            {
+                if (Directory.Exists(extractDir))
+                    Directory.Delete(extractDir, true);
+                Directory.CreateDirectory(extractDir);
+                ZipFile.ExtractToDirectory(templatePath, extractDir);
+
+                var vst = Directory.EnumerateFiles(extractDir, "*.vstemplate", SearchOption.AllDirectories)
+                                   .FirstOrDefault();
+                if (vst != null)
+                    Report(progress, "Извлечён файл .vstemplate: " + vst);
+                return vst;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static bool MatchesName(string filePath, string name, string baseName, bool hasExtension)
