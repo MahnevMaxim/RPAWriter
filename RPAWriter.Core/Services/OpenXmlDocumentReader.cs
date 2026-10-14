@@ -11,7 +11,10 @@ using RPAWriter.Core.Models;
 
 namespace RPAWriter.Core.Services
 {
-    /// <summary>Чтение ТЗ из Word (.docx) и Excel (.xlsx) через Open XML SDK.</summary>
+    /// <summary>
+    /// Чтение ТЗ из Word (.docx) и Excel (.xlsx) через Open XML SDK,
+    /// а также legacy-форматов (.doc/.xls) через NPOI.
+    /// </summary>
     public class OpenXmlDocumentReader : IDocumentReader
     {
         public SpecModel Read(string path)
@@ -29,6 +32,9 @@ namespace RPAWriter.Core.Services
                 case ".xlsx":
                     text = ReadExcelText(path);
                     break;
+                case ".doc":
+                case ".xls":
+                    return new NpoiDocumentReader().Read(path);
                 case ".txt":
                 case ".md":
                 case ".markdown":

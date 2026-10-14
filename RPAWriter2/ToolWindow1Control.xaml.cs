@@ -129,7 +129,7 @@ namespace RPAWriter2
             var dlg = new OpenFileDialog
             {
                 Title = "Выберите ТЗ",
-                Filter = "ТЗ (*.docx;*.xlsx;*.txt;*.md)|*.docx;*.xlsx;*.txt;*.md|Все файлы (*.*)|*.*"
+                Filter = "ТЗ (*.docx;*.doc;*.xlsx;*.xls;*.txt;*.md)|*.docx;*.doc;*.xlsx;*.xls;*.txt;*.md|Все файлы (*.*)|*.*"
             };
             if (dlg.ShowDialog() != true) return;
 
@@ -212,7 +212,7 @@ namespace RPAWriter2
             var dlg = new OpenFileDialog
             {
                 Title = "Документация роботов",
-                Filter = "Документация (*.docx;*.txt;*.md)|*.docx;*.txt;*.md|Все файлы (*.*)|*.*",
+                Filter = "Документация (*.docx;*.doc;*.txt;*.md)|*.docx;*.doc;*.txt;*.md|Все файлы (*.*)|*.*",
                 Multiselect = true
             };
             if (dlg.ShowDialog() != true) return;
