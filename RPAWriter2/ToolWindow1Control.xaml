@@ -160,8 +160,9 @@
     <DockPanel Margin="8">
         <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
             <Button Content="Импорт ТЗ" Click="OnImportSpec" Margin="0,0,8,0"/>
+            <Button Content="Поиск похожих" Click="OnFindSimilar" Margin="0,0,8,0"/>
         </WrapPanel>
-        <TabControl>
+        <TabControl x:Name="MainTabs">
         <TabItem Header="Чат">
             <Grid>
                 <Grid.RowDefinitions>
@@ -206,7 +207,7 @@
                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
         </TabItem>
 
-        <TabItem Header="Настройки">
+        <TabItem x:Name="SettingsTab" Header="Настройки">
             <Grid Margin="8" VerticalAlignment="Top">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>

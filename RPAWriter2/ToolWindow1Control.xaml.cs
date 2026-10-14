@@ -10,6 +10,8 @@ using System.Windows.Input;
 using System.Linq;
 using System.Text;
 using Microsoft.Win32;
+using System.IO;
+using System.Collections.Generic;
 using RPAWriter.Core.Models;
 
 namespace RPAWriter2
@@ -43,6 +45,24 @@ namespace RPAWriter2
         private void RecreateAiProvider()
         {
             _ai = AiProviderFactory.Create(_settings);
+        }
+
+        private string KbPath()
+        {
+            return (KbPathBox?.Text ?? "").Trim();
+        }
+
+        private string? RequireKbPath()
+        {
+            var p = KbPath();
+            if (string.IsNullOrWhiteSpace(p))
+            {
+                AppendChat("Сначала укажите каталог базы знаний во вкладке «Настройки».");
+                SetOutput("Не настроен каталог базы знаний. Укажите путь во вкладке «Настройки».");
+                MainTabs.SelectedItem = SettingsTab;
+                return null;
+            }
+            return p;
         }
 
         private void AppendChat(string text)
@@ -120,6 +140,27 @@ namespace RPAWriter2
             {
                 ShowError(ex);
             }
+        }
+
+        private async void OnFindSimilar(object sender, RoutedEventArgs e)
+        {
+            if (_currentSpec == null) { AppendChat("Сначала импортируйте ТЗ."); return; }
+            try
+            {
+                var kbPath = RequireKbPath();
+                if (kbPath == null) return;
+                var kb = new FileKnowledgeBase(kbPath);
+                var matches = new List<SimilarTaskMatch>();
+                foreach (var task in _currentSpec.Tasks)
+                    matches.AddRange(await kb.FindSimilarTasksAsync(task, 3));
+
+                var sb = new StringBuilder();
+                foreach (var m in matches)
+                    sb.AppendLine("[" + m.Score.ToString("P0") + "] " + m.Solution.Name + " — " + string.Join("; ", m.Reasons));
+                SetOutput(sb.Length == 0 ? "Похожих задач не найдено." : sb.ToString());
+                AppendChat("Найдено похожих задач: " + matches.Count);
+            }
+            catch (Exception ex) { ShowError(ex); }
         }
 #pragma warning restore VSTHRD100
 
