@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.Shell;
 using RPAWriter.Commands;
 using RPAWriter.Options;
+using RPAWriter.ToolWindows;
 
 namespace RPAWriter
 {
@@ -25,6 +26,7 @@ namespace RPAWriter
     [Guid(RPAWriterPackage.PackageGuidString)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideOptionPage(typeof(RpaWriterOptionsPage), "RPAWriter", "Общие", 0, 0, true)]
+    [ProvideToolWindow(typeof(RpaWriterToolWindow))]
     public sealed class RPAWriterPackage : AsyncPackage
     {
         /// <summary>
@@ -44,6 +46,7 @@ namespace RPAWriter
 
             await BuildReleaseCommand.InitializeAsync(this);
             await ConvertUiPathCommand.InitializeAsync(this);
+            await ShowRpaWriterCommand.InitializeAsync(this);
         }
 
         /// <summary>Простой хелпер для логирования ошибок в ActivityLog.</summary>

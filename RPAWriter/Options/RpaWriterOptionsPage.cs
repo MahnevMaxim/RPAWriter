@@ -10,7 +10,7 @@ namespace RPAWriter.Options
         [Category("AI-провайдер")]
         [DisplayName("Base URL")]
         [Description("Базовый URL OpenAI-совместимого API (например, https://api.openai.com/v1).")]
-        public string BaseUrl { get; set; } = "https://api.openai.com/v1";
+        public string BaseUrl { get; set; }
 
         [Category("AI-провайдер")]
         [DisplayName("API-ключ")]

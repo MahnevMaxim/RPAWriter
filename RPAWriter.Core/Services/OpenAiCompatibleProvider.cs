@@ -124,6 +124,11 @@ namespace RPAWriter.Core.Services
             };
         }
 
+        public async Task<string> ChatAsync(string message, CancellationToken cancellationToken = default)
+        {
+            return await CompleteAsync(message, cancellationToken).ConfigureAwait(false);
+        }
+
         internal async Task<string> CompleteAsync(string userMessage, CancellationToken cancellationToken)
         {
             var request = BuildRequest(userMessage);

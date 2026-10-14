@@ -1,8 +1,16 @@
 <Solution>
+  <Project Path="RPAWriter.Core/RPAWriter.Core.csproj">
+    <BuildType Project="Release" />
+  </Project>
+  <Project Path="RPAWriter.Tests/RPAWriter.Tests.csproj">
+    <BuildType Project="Release" />
+  </Project>
   <Project Path="RPAWriter/RPAWriter.csproj">
+    <BuildType Project="Release" />
     <Deploy />
   </Project>
-  <Project Path="RPAWriter.Core/RPAWriter.Core.csproj" />
-  <Project Path="RPAWriter.Tests/RPAWriter.Tests.csproj" />
+  <Project Path="VSIXProject1/VSIXProject1.csproj" Id="6dd44e37-5bce-46ce-a021-fa40c5742d13">
+    <Deploy />
+  </Project>
 </Solution>
 

@@ -106,6 +106,12 @@ namespace RPAWriter.Core.Services
             return Task.FromResult(record);
         }
 
+        public Task<string> ChatAsync(string message, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                "Заглушка: получил сообщение \"" + message + "\". Подключите OpenAI-совместимый провайдер в настройках.");
+        }
+
         private static string MethodNameFor(TaskDescriptor task)
         {
             var action = task?.Action ?? "Run";

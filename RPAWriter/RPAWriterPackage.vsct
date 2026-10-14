@@ -23,6 +23,12 @@
           <ButtonText>Конвертировать UiPath → WF</ButtonText>
         </Strings>
       </Button>
+      <Button guid="guidRPAWriterCommandSet" id="cmdidShowRpaWriter" priority="0x0300" type="Button">
+        <Parent guid="guidRPAWriterCommandSet" id="RpaWriterMenuGroup"/>
+        <Strings>
+          <ButtonText>Открыть RPA Writer</ButtonText>
+        </Strings>
+      </Button>
     </Buttons>
   </Commands>
 
@@ -32,6 +38,7 @@
       <IDSymbol name="RpaWriterMenuGroup" value="0x1020" />
       <IDSymbol name="cmdidBuildRelease" value="0x0100" />
       <IDSymbol name="cmdidConvertUiPath" value="0x0101" />
+      <IDSymbol name="cmdidShowRpaWriter" value="0x0102" />
     </GuidSymbol>
   </Symbols>
 

@@ -17,6 +17,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="18.9.820" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
   <ItemGroup>
@@ -32,6 +33,12 @@
     <VSCTCompile Include="RPAWriterPackage.vsct">
       <ResourceName>Menus.ctmenu</ResourceName>
     </VSCTCompile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- VSSDK исключает Newtonsoft.Json из VSIX по умолчанию; включаем принудительно,
+         т.к. RPAWriter.Core.dll зависит от него, а VS не резолвит его для сторонних расширений. -->
+    <VSIXSourceItem Include="$(OutputPath)Newtonsoft.Json.dll" />
   </ItemGroup>
 
 </Project>

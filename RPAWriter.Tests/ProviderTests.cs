@@ -98,5 +98,23 @@ namespace RPAWriter.Tests
 
             Assert.That(tasks.Count, Is.GreaterThanOrEqualTo(2));
         }
+
+        [Test]
+        public async Task StubAiProvider_ChatAsync_ReturnsText()
+        {
+            var reply = await new StubAiProvider().ChatAsync("привет");
+            Assert.That(reply, Does.Contain("привет"));
+        }
+
+        [Test]
+        public async Task OpenAiProvider_ChatAsync_ReturnsContent()
+        {
+            var handler = new FakeHttpHandler { Responder = req => Completion("Привет, я агент!") };
+            var provider = new OpenAiCompatibleProvider(new OpenAiOptions(), new HttpClient(handler));
+
+            var reply = await provider.ChatAsync("здравствуй");
+
+            Assert.That(reply, Is.EqualTo("Привет, я агент!"));
+        }
     }
 }

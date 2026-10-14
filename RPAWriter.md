@@ -84,24 +84,18 @@ public static class RpaActions
 - `RobotGenerator` — эмиттеры XAML и C#.
 - `RpaPipelineService` — оркестратор сквозного конвейера.
 
-### 4.3. Команды и UI
+### 4.3. UI: единое окно «RPA Writer»
 
-| Команда | Назначение |
-|---|---|
-| `ImportSpecCommand` | импорт ТЗ (Word/Excel) |
-| `FindSimilarCommand` | поиск похожих ТЗ |
-| `GenerateRobotCommand` | генерация робота |
-| `FormKnowledgeBaseCommand` | формирование базы знаний |
-| `BuildReleaseCommand` | сборка Release в 1 клик |
-| `DownloadAnalyzeLogsCommand` | скачивание/анализ удалённых логов |
-| `ShowLogsCommand` | просмотр логов |
+Расширение предоставляет **одно окно** (`RpaWriterToolWindow` + `RpaWriterControl`), в котором собраны **все** возможности:
 
-Tool Windows:
+- **чат с агентом** — история сообщений + поле ввода;
+- **все кнопки**: «Импорт ТЗ», «Поиск похожих», «Сгенерировать робота», «Сформировать БЗ», «Собрать Release», «Анализ логов», «Конвертировать UiPath → WF»;
+- **настройки прямо в окне** (Base URL, API-ключ, модель, каталог БЗ) с кнопкой «Сохранить» (синхронизированы с Options-страницей);
+- **предпросмотр результата** (сгенерированный XAML/C#, найденные похожие решения, логи).
 
-- **«RPA Writer»** — чат, список похожих ТЗ, предпросмотр кода, кнопки.
-- **«Логи»** — просмотр локальных и удалённых логов.
+Меню **Tools → RPAWriter** дополнительно содержит быстрые команды («Собрать Release», «Конвертировать UiPath → WF», «Открыть RPA Writer»).
 
-Options-страница: настройки провайдера, каталог базы знаний, конфиги роботов/серверов, источники логов.
+Options-страница: настройки провайдера и каталог базы знаний (дублирует поля окна).
 
 ## 5. Режимы работы агента
 
@@ -160,9 +154,10 @@ RPAWriter/
     BuildReleaseCommand.cs
     DownloadAnalyzeLogsCommand.cs
     ShowLogsCommand.cs
+    ShowRpaWriterCommand.cs
   ToolWindows/
-    RpaWriterToolWindow.cs (+ control)
-    LogsToolWindow.cs
+    RpaWriterToolWindow.cs
+    RpaWriterControl.cs
   Contracts/
     IAiProvider.cs
     IDocumentReader.cs
