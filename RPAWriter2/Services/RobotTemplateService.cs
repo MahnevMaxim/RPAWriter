@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using NuGet.VisualStudio;
 
 namespace RPAWriter2.Services
 {
@@ -83,11 +84,11 @@ namespace RPAWriter2.Services
             var message = "Решение создано.";
             try
             {
-                RunNuGetReinstall(dte, progress);
+                ReinstallPackages(dte, progress);
             }
             catch (Exception ex)
             {
-                message += " Не удалось запустить Update-Package -Reinstall: " + ex.Message;
+                message += " Не удалось переустановить пакеты NuGet: " + ex.Message;
             }
             return new RobotCreateResult { Success = true, Message = message, SolutionPath = slnFile };
         }
@@ -226,40 +227,66 @@ namespace RPAWriter2.Services
         }
 
         /// <summary>
-        /// Запускает команду NuGet в Package Manager Console через MEF-сервис IPowerConsoleService.
-        /// Тип сервиса и метод Execute находятся рефлексией, т.к. сборка NuGet.Console.dll
-        /// версионирована под конкретную VS и не должна жёстко подключаться.
+        /// Переустанавливает (reinstall) пакеты NuGet во всех проектах решения:
+        /// для каждого установленного пакета — сначала удаление, затем установка той же версии.
+        /// Использует документированные MEF-сервисы NuGet.VisualStudio (IVsPackageInstaller и др.).
         /// </summary>
-        private static void RunNuGetReinstall(DTE2 dte, IProgress<string>? progress)
+        private static void ReinstallPackages(DTE2 dte, IProgress<string>? progress)
         {
-            const string command = "Update-Package -Reinstall";
-            Report(progress, "Запускаю команду NuGet: " + command);
-
-            // Открываем/инициализируем Package Manager Console.
-            try { dte.ExecuteCommand("View.PackageManagerConsole"); }
-            catch { /* окно могло быть уже открыто */ }
-
             var componentModel = Package.GetGlobalService(typeof(SComponentModel)) as IComponentModel;
             if (componentModel == null)
                 throw new InvalidOperationException("Не удалось получить компонентную модель VS.");
 
-            // NuGet.Console.dll лежит рядом с devenv.exe: <IDE>\CommonExtensions\Microsoft\NuGet\
-            var ideDir = Path.GetDirectoryName(dte.FullName ?? "");
-            if (string.IsNullOrEmpty(ideDir))
-                throw new InvalidOperationException("Не удалось определить каталог установки VS.");
+            var services = componentModel.GetService<IVsPackageInstallerServices>();
+            var uninstaller = componentModel.GetService<IVsPackageUninstaller>();
+            var installer = componentModel.GetService<IVsPackageInstaller>();
 
-            var consoleDll = Path.Combine(ideDir, "CommonExtensions", "Microsoft", "NuGet", "NuGet.Console.dll");
-            var consoleServiceType = Assembly.LoadFrom(consoleDll)
-                .GetType("NuGetConsole.IPowerConsoleService", throwOnError: true)!;
+            foreach (Project project in EnumerateProjects(dte))
+            {
+#pragma warning disable CS0618 // GetInstalledPackages(Project) устарел в пользу INuGetProjectService
+                var installed = services.GetInstalledPackages(project).ToList();
+#pragma warning restore CS0618
 
-            var getService = typeof(IComponentModel).GetMethod("GetService", Type.EmptyTypes)!;
-            var console = getService.MakeGenericMethod(consoleServiceType).Invoke(componentModel, null)
-                ?? throw new InvalidOperationException("Служба Package Manager Console недоступна.");
+                if (installed.Count == 0)
+                    continue;
 
-            var execute = consoleServiceType.GetMethod("Execute")
-                ?? throw new InvalidOperationException("Метод Execute службы PMC не найден.");
-            var accepted = (bool)execute.Invoke(console, new object[] { command, null })!;
-            Report(progress, accepted ? "Команда NuGet принята консолью." : "Команда NuGet не принята консолью.");
+                Report(progress, "Переустанавливаю пакеты проекта: " + project.Name);
+                foreach (var pkg in installed)
+                {
+                    Report(progress, "  Reinstall: " + pkg.Id + " " + pkg.VersionString);
+                    uninstaller.UninstallPackage(project, pkg.Id, removeDependencies: false);
+                    installer.InstallPackage(null, project, pkg.Id, pkg.VersionString, ignoreDependencies: false);
+                }
+            }
+        }
+
+        private static IEnumerable<Project> EnumerateProjects(DTE2 dte)
+        {
+            var solution = dte?.Solution;
+            if (solution == null)
+                yield break;
+
+            foreach (Project project in solution.Projects)
+                foreach (var inner in EnumerateProjectTree(project))
+                    yield return inner;
+        }
+
+        private static IEnumerable<Project> EnumerateProjectTree(Project project)
+        {
+            if (project == null)
+                yield break;
+
+            // Папку решения (solution folder) разворачиваем рекурсивно.
+            if (project.Kind == EnvDTE80.ProjectKinds.vsProjectKindSolutionFolder)
+            {
+                foreach (ProjectItem item in project.ProjectItems)
+                    if (item.SubProject is Project sub)
+                        foreach (var inner in EnumerateProjectTree(sub))
+                            yield return inner;
+                yield break;
+            }
+
+            yield return project;
         }
 
         private static bool MatchesName(string filePath, string name, string baseName, bool hasExtension)
