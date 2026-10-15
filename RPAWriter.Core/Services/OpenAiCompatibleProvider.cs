@@ -27,6 +27,9 @@ namespace RPAWriter.Core.Services
         public string ChatSystemPrompt { get; set; } =
             "Ты — ассистент-разработчик RPA-роботов на Windows Workflow Foundation. " +
             "Отвечай кратко и по делу обычным текстом, без JSON, если явно не попросят.";
+
+        /// <summary>Каталог с markdown-файлами правил обработки ТЗ и формирования задач.</summary>
+        public string RulesPath { get; set; } = "";
     }
 
     /// <summary>
@@ -48,12 +51,23 @@ namespace RPAWriter.Core.Services
                 _http.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
         }
 
+        /// <summary>Читает правила обработки ТЗ из каталога (если задан) и добавляет их к промпту.</summary>
+        private string ApplyRules(string prompt)
+        {
+            var rules = ProcessingRulesReader.ReadAll(_options.RulesPath);
+            if (string.IsNullOrWhiteSpace(rules))
+                return prompt;
+            return "Ниже приведены правила обработки ТЗ и формирования задач. Строго следуй им.\n\n" +
+                   rules + "\n\n" + prompt;
+        }
+
         public async Task<SpecAnalysis> AnalyzeSpecAsync(SpecModel spec, CancellationToken cancellationToken = default)
         {
             var content = await CompleteAsync(
-                "Проанализируй техническое задание и верни JSON вида " +
-                "{\"summary\":\"...\",\"tasks\":[{\"action\":\"...\",\"target\":\"...\",\"description\":\"...\",\"activityType\":\"...\"}]}.\n\nТЗ:\n" +
-                (spec?.RawText ?? ""), cancellationToken).ConfigureAwait(false);
+                ApplyRules(
+                    "Проанализируй техническое задание и верни JSON вида " +
+                    "{\"summary\":\"...\",\"tasks\":[{\"action\":\"...\",\"target\":\"...\",\"description\":\"...\",\"activityType\":\"...\"}]}.\n\nТЗ:\n" +
+                    (spec?.RawText ?? "")), cancellationToken).ConfigureAwait(false);
 
             var obj = ParseJson(content);
             var analysis = new SpecAnalysis { Summary = obj.Value<string>("summary") ?? "" };
@@ -92,9 +106,10 @@ namespace RPAWriter.Core.Services
         public async Task<IReadOnlyList<TaskDescriptor>> DecomposeTasksAsync(string text, CancellationToken cancellationToken = default)
         {
             var content = await CompleteAsync(
-                "Разбей документ на мелкие атомарные задачи. Верни JSON-массив: " +
-                "[{\"action\":\"...\",\"target\":\"...\",\"description\":\"...\",\"activityType\":\"...\"}].\n\nДокумент:\n" +
-                (text ?? ""), cancellationToken).ConfigureAwait(false);
+                ApplyRules(
+                    "Разбей документ на мелкие атомарные задачи. Верни JSON-массив: " +
+                    "[{\"action\":\"...\",\"target\":\"...\",\"description\":\"...\",\"activityType\":\"...\"}].\n\nДокумент:\n" +
+                    (text ?? "")), cancellationToken).ConfigureAwait(false);
 
             var array = ParseArray(content);
             var result = new List<TaskDescriptor>();

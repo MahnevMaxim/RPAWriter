@@ -61,6 +61,7 @@ namespace RPAWriter2
             KbPathBox.Text = _settings.KnowledgeBasePath ?? "";
             RobotsRootPathBox.Text = _settings.RobotsRootPath ?? "";
             RobotTemplateNameBox.Text = _settings.RobotTemplateName ?? "";
+            RulesPathBox.Text = _settings.RulesPath ?? "";
         }
 
         private void RecreateAiProvider()
@@ -648,6 +649,7 @@ namespace RPAWriter2
             _settings.KnowledgeBasePath = KbPathBox.Text.Trim();
             _settings.RobotsRootPath = RobotsRootPathBox.Text.Trim();
             _settings.RobotTemplateName = RobotTemplateNameBox.Text.Trim();
+            _settings.RulesPath = RulesPathBox.Text.Trim();
             SettingsStore.Save(_settings);
             RecreateAiProvider();
             AppendChat("Настройки сохранены. Провайдер: " + (_ai is StubAiProvider ? "заглушка (офлайн)" : "OpenAI-совместимый"));

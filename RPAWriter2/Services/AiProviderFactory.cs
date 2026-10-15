@@ -16,7 +16,8 @@ namespace RPAWriter2.Services
             {
                 BaseUrl = string.IsNullOrWhiteSpace(settings.BaseUrl) ? "https://api.openai.com/v1" : settings.BaseUrl.Trim(),
                 ApiKey = apiKey,
-                Model = string.IsNullOrWhiteSpace(settings.Model) ? "gpt-4o-mini" : settings.Model.Trim()
+                Model = string.IsNullOrWhiteSpace(settings.Model) ? "gpt-4o-mini" : settings.Model.Trim(),
+                RulesPath = (settings?.RulesPath ?? "").Trim()
             });
         }
     }

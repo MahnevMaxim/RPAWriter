@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
@@ -25,6 +27,21 @@ namespace RPAWriter2.Services
     /// </summary>
     public class RobotTemplateService
     {
+        /// <summary>GUID окна Package Manager Console (PowerConsoleToolWindow).</summary>
+        private static readonly Guid PowerConsoleWindowGuid = new Guid("0AD07096-BBA9-4900-A651-0598D26F6D24");
+
+        /// <summary>Сколько времени ждать готовности PowerShell-хоста Package Manager Console.</summary>
+        private static readonly TimeSpan PowerConsoleReadyTimeout = TimeSpan.FromSeconds(30);
+
+        /// <summary>Сколько проектов должно появиться в решении после развёртывания шаблона.</summary>
+        private const int ExpectedProjectCount = 2;
+
+        /// <summary>Сколько времени ждать появления всех проектов решения.</summary>
+        private static readonly TimeSpan ProjectWaitTimeout = TimeSpan.FromSeconds(120);
+
+        /// <summary>Kind папки решения (solution folder) в EnvDTE.</summary>
+        private const string SolutionFolderKind = "{66A26722-8FB5-11D2-AA7E-00C04F688DDE}";
+
         public async Task<RobotCreateResult> CreateRobotAsync(
             string solutionName, string rootPath, string templateName,
             IProgress<string>? progress = null,
@@ -76,6 +93,10 @@ namespace RPAWriter2.Services
             {
                 return Fail("Не удалось создать решение из шаблона: " + ex.Message);
             }
+
+            // Ждём, пока шаблон полностью развернётся в решении (по умолчанию 2 проекта),
+            // иначе reinstall может затронуть не все проекты.
+            await WaitForProjectsAsync(dte, ExpectedProjectCount, progress, cancellationToken);
 
             // После создания решения переустанавливаем пакеты NuGet.
             var message = "Решение создано.";
@@ -225,10 +246,9 @@ namespace RPAWriter2.Services
 
         /// <summary>
         /// Запускает команду в Package Manager Console (например «Update-Package -Reinstall»).
-        /// Команда передаётся через dte.ExecuteCommand с аргументом — так же, как в рабочем
-        /// PowerShell-сценарии ($dte.ExecuteCommand("View.PackageManagerConsole", "...")).
-        /// DTE получаем через Package.GetGlobalService, поэтому команда всегда уходит в текущий
-        /// экземпляр Visual Studio, даже если одновременно открыто несколько экземпляров VS.
+        /// Основной путь — через канонический IPowerConsoleService (окно PMC), который корректно
+        /// ставит команду в очередь, пока PowerShell-хост ещё инициализируется. Если сервис
+        /// получить не удалось — фолбэк на прежний dte.ExecuteCommand с аргументом.
         /// </summary>
         public async Task RunPackageManagerCommandAsync(
             string command, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
@@ -240,8 +260,6 @@ namespace RPAWriter2.Services
             var dte = Package.GetGlobalService(typeof(SDTE)) as DTE2
                 ?? throw new InvalidOperationException("Не удалось получить доступ к Visual Studio (DTE).");
 
-            Report(progress, "Запускаю команду NuGet: " + command);
-
             // Активируем главное окно VS, чтобы консоль гарантированно была на переднем плане.
             try { dte.MainWindow?.Activate(); }
             catch { /* окно могло быть недоступно */ }
@@ -250,13 +268,21 @@ namespace RPAWriter2.Services
             try { dte.ExecuteCommand("View.PackageManagerConsole"); }
             catch { /* окно могло быть уже открыто */ }
 
-            // Даём Package Manager Console время инициализировать PowerShell-хост.
             Report(progress, "Ожидаю готовность Package Manager Console…");
+
+            // Основной путь: канонический IPowerConsoleService (окно PMC).
+            if (await TrySendViaPowerConsoleAsync(command, cancellationToken))
+            {
+                Report(progress, "Команда отправлена через IPowerConsoleService: " + command);
+                return;
+            }
+
+            // Фолбэк: прежний рабочий вариант через dte.ExecuteCommand.
+            Report(progress, "IPowerConsoleService недоступен — использую dte.ExecuteCommand (фолбэк).");
+
             await Task.Delay(3000, cancellationToken).ConfigureAwait(false);
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
-            // Передаём команду аргументом — именно этот вариант ExecuteCommand реально выполняет
-            // команду в PMC (аналог рабочего PowerShell-сценария).
             try
             {
                 dte.ExecuteCommand("View.PackageManagerConsole", command);
@@ -267,7 +293,191 @@ namespace RPAWriter2.Services
                     "Не удалось отправить команду в Package Manager Console: " + ex.Message, ex);
             }
 
-            Report(progress, "Команда NuGet отправлена в консоль и выполняется.");
+            Report(progress, "Команда отправлена через dte.ExecuteCommand (фолбэк) и выполняется: " + command);
+        }
+
+        /// <summary>
+        /// Пытается отправить команду через канонический IPowerConsoleService (окно PMC).
+        /// Дожидается инициализации PowerShell-хоста и возвращает true, если команда принята.
+        /// </summary>
+        private static async Task<bool> TrySendViaPowerConsoleAsync(string command, CancellationToken cancellationToken)
+        {
+            var deadline = DateTime.UtcNow + PowerConsoleReadyTimeout;
+
+            while (true)
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var console = ResolvePowerConsoleWindow();
+                if (console == null)
+                {
+                    if (DateTime.UtcNow > deadline)
+                        return false;
+                    await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                var execute = console.GetType().GetMethod(
+                    "Execute",
+                    BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    new[] { typeof(string), typeof(object[]) },
+                    null);
+                if (execute == null)
+                    return false;
+
+                var isInitialized = console.GetType().GetMethod(
+                    "IsHostSuccessfullyInitialized",
+                    BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    Type.EmptyTypes,
+                    null);
+
+                bool ready = true;
+                if (isInitialized != null)
+                {
+                    try { ready = (bool)(isInitialized.Invoke(console, null) ?? false); }
+                    catch { ready = false; }
+                }
+
+                if (ready)
+                {
+                    bool accepted;
+                    try
+                    {
+                        accepted = (bool)(execute.Invoke(console, new object[] { command, new object[0] }) ?? false);
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+
+                    if (accepted)
+                        return true;
+                }
+
+                if (DateTime.UtcNow > deadline)
+                    return false;
+
+                await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>Находит окно Package Manager Console и возвращает его объект (IPowerConsoleService).</summary>
+        private static object? ResolvePowerConsoleWindow()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                var uiShell = Package.GetGlobalService(typeof(SVsUIShell)) as IVsUIShell;
+                if (uiShell == null)
+                    return null;
+
+                var slot = PowerConsoleWindowGuid;
+                IVsWindowFrame? frame = null;
+                int hr = uiShell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fFindFirst, ref slot, out frame);
+                if (hr != 0 || frame == null) // 0 = S_OK
+                    return null;
+
+                object? docView;
+                hr = frame.GetProperty((int)__VSFPROPID.VSFPROPID_DocView, out docView);
+                if (hr != 0 || docView == null) // 0 = S_OK
+                    return null;
+
+                return docView;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Ждёт, пока в решении появится ожидаемое число проектов (шаблон всегда разворачивает
+        /// фиксированное количество проектов).
+        /// </summary>
+        private static async Task WaitForProjectsAsync(
+            DTE2 dte, int expectedCount, IProgress<string>? progress, CancellationToken cancellationToken)
+        {
+            var deadline = DateTime.UtcNow + ProjectWaitTimeout;
+            int lastCount = -1;
+
+            while (true)
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                int count;
+                try
+                {
+                    count = CountProjects(dte.Solution);
+                }
+                catch
+                {
+                    count = 0;
+                }
+
+                if (count != lastCount)
+                {
+                    Report(progress, "Ожидаю создание проектов в решении… (" + count + "/" + expectedCount + ")");
+                    lastCount = count;
+                }
+
+                if (count >= expectedCount)
+                {
+                    Report(progress, "Проекты в решении созданы: " + count + ".");
+                    return;
+                }
+
+                if (DateTime.UtcNow > deadline)
+                {
+                    Report(progress, "Не дождался всех проектов решения (" + count + "/" + expectedCount +
+                        "), продолжаю с тем, что есть.");
+                    return;
+                }
+
+                await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>Рекурсивный подсчёт проектов в решении (с учётом папок решения).</summary>
+        private static int CountProjects(EnvDTE.Solution solution)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (solution == null || solution.Projects == null)
+                return 0;
+
+            int count = 0;
+            foreach (EnvDTE.Project project in solution.Projects)
+                count += CountProjects(project);
+            return count;
+        }
+
+        private static int CountProjects(EnvDTE.Project project)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (project == null)
+                return 0;
+
+            if (string.Equals(project.Kind, SolutionFolderKind, StringComparison.OrdinalIgnoreCase))
+            {
+                int count = 0;
+                if (project.ProjectItems != null)
+                {
+                    foreach (EnvDTE.ProjectItem item in project.ProjectItems)
+                    {
+                        EnvDTE.Project? sub = null;
+                        try { sub = item.SubProject; }
+                        catch { sub = null; }
+                        if (sub != null)
+                            count += CountProjects(sub);
+                    }
+                }
+                return count;
+            }
+
+            return 1;
         }
 
         private static bool MatchesName(string filePath, string name, string baseName, bool hasExtension)

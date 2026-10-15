@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -176,6 +177,57 @@ namespace RPAWriter.Tests
             var provider = new OpenAiCompatibleProvider(new OpenAiOptions { TimeoutSeconds = 1 }, new HttpClient(handler));
 
             Assert.ThrowsAsync<TimeoutException>(async () => await provider.ChatAsync("привет"));
+        }
+
+        [Test]
+        public async Task AnalyzeSpecAsync_IncludesRulesFromFolder()
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "rpawriter_rules_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                File.WriteAllText(Path.Combine(dir, "rules.md"), "Правило: используй InvokeMethod для всех действий.");
+                var handler = new FakeHttpHandler
+                {
+                    Responder = req => Completion("{\"summary\":\"s\",\"tasks\":[]}")
+                };
+                var provider = new OpenAiCompatibleProvider(new OpenAiOptions
+                {
+                    BaseUrl = "https://example.com/v1",
+                    ApiKey = "sk-test",
+                    Model = "test-model",
+                    RulesPath = dir
+                }, new HttpClient(handler));
+
+                await provider.AnalyzeSpecAsync(new SpecModel { RawText = "Открыть сайт" });
+
+                Assert.That(handler.LastBody, Does.Contain("Правило: используй InvokeMethod"));
+            }
+            finally
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
+        public async Task DecomposeTasksAsync_IncludesRulesFromFolder()
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "rpawriter_rules_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                File.WriteAllText(Path.Combine(dir, "rules.md"), "Правило: одна задача — одно действие.");
+                var handler = new FakeHttpHandler { Responder = req => Completion("[{\"action\":\"открыть\"}]") };
+                var provider = new OpenAiCompatibleProvider(new OpenAiOptions { RulesPath = dir }, new HttpClient(handler));
+
+                await provider.DecomposeTasksAsync("Открыть браузер");
+
+                Assert.That(handler.LastBody, Does.Contain("Правило: одна задача — одно действие."));
+            }
+            finally
+            {
+                Directory.Delete(dir, recursive: true);
+            }
         }
     }
 }
