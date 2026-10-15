@@ -245,12 +245,26 @@ namespace RPAWriter2
             ShowImportProgress("Чтение файла…");
             try
             {
+                var docsDir = Path.Combine(solutionDir, "docs");
+                Directory.CreateDirectory(docsDir);
+
+                // Копия исходного файла ТЗ в неизменном виде.
                 SaveImportedSpec(dlg.FileName, solutionDir);
 
                 var spec = new OpenXmlDocumentReader().Read(dlg.FileName);
+
+                // 1. Структурированный spec.md (заголовки, списки, таблицы).
+                WriteMarkdownWithConfirm(Path.Combine(docsDir, "spec.md"), spec.MarkdownText, "spec.md");
+
+                // 2. Декомпозиция ТЗ на задачи.
                 SetImportStatus("Разбор задач (AI)…");
                 var tasks = await _ai.DecomposeTasksAsync(spec.RawText);
                 spec.Tasks = tasks.ToList();
+
+                // 3. Структурированный tasks.md.
+                var tasksMarkdown = MarkdownContent.TasksToMarkdown(spec);
+                WriteMarkdownWithConfirm(Path.Combine(docsDir, "tasks.md"), tasksMarkdown, "tasks.md");
+
                 _currentSpec = spec;
                 HideNotice();
 
@@ -273,6 +287,69 @@ namespace RPAWriter2
             finally
             {
                 HideImportProgress();
+            }
+        }
+
+        /// <summary>
+        /// Сохраняет md-файл. Если файл уже существует — предлагает перезаписать целиком,
+        /// найти расхождения и применить исправления частично, либо оставить как есть.
+        /// </summary>
+        private void WriteMarkdownWithConfirm(string path, string content, string displayName)
+        {
+            if (!File.Exists(path))
+            {
+                File.WriteAllText(path, content);
+                AppendChat("Создан " + displayName + ".");
+                return;
+            }
+
+            var choice = MessageBox.Show(
+                "Файл " + displayName + " уже существует.\n\n" +
+                "Да — перезаписать целиком.\n" +
+                "Нет — найти расхождения и предложить частичное исправление.\n" +
+                "Отмена — оставить без изменений.",
+                "Файл уже существует",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Question);
+
+            switch (choice)
+            {
+                case MessageBoxResult.Yes:
+                    File.WriteAllText(path, content);
+                    AppendChat(displayName + " перезаписан.");
+                    break;
+
+                case MessageBoxResult.No:
+                    var existing = File.ReadAllText(path);
+                    var diff = TextDiff.Diff(existing, content);
+                    var summary = diff.HasChanges ? diff.Summary : "Расхождений не найдено.";
+                    SetOutput(summary);
+                    if (diff.HasChanges)
+                    {
+                        var apply = MessageBox.Show(
+                            summary + "\n\nПрименить исправления (перезаписать)?",
+                            "Частичное исправление — " + displayName,
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Question);
+                        if (apply == MessageBoxResult.Yes)
+                        {
+                            File.WriteAllText(path, content);
+                            AppendChat("Исправления применены к " + displayName + ".");
+                        }
+                        else
+                        {
+                            AppendChat(displayName + " оставлен без изменений.");
+                        }
+                    }
+                    else
+                    {
+                        AppendChat(displayName + " не изменился.");
+                    }
+                    break;
+
+                default: // Отмена
+                    AppendChat(displayName + " оставлен без изменений.");
+                    break;
             }
         }
 

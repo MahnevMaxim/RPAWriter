@@ -21,6 +21,7 @@ namespace RPAWriter.Core.Models
         public string Name { get; set; }
         public string SourcePath { get; set; }
         public string RawText { get; set; }
+        public string MarkdownText { get; set; }
         public List<TaskDescriptor> Tasks { get; set; } = new List<TaskDescriptor>();
     }
 

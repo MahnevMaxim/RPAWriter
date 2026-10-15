@@ -180,16 +180,6 @@
                             <Button Content="Создать робота" Click="OnCreateRobot" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
-
-                    <Border x:Name="RestorePackagesPanel"
-                            Background="{StaticResource Dark.Panel}" BorderBrush="{StaticResource Dark.Border}"
-                            BorderThickness="1" CornerRadius="2" Padding="8,6" Visibility="Collapsed">
-                        <StackPanel Orientation="Horizontal">
-                            <Button Content="Восстановить пакеты" Click="OnRestorePackages" VerticalAlignment="Center"/>
-                            <TextBlock Text="Update-Package -Reinstall для текущего решения" VerticalAlignment="Center"
-                                       Margin="8,0,0,0" Foreground="#C8C8C8"/>
-                        </StackPanel>
-                    </Border>
                 </StackPanel>
 
                 <ScrollViewer Grid.Row="1" x:Name="ChatScroll"
@@ -315,6 +305,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Base URL" VerticalAlignment="Center" Margin="0,0,8,4"/>
@@ -336,6 +327,16 @@
                 <TextBox Grid.Row="5" Grid.Column="1" x:Name="RobotTemplateNameBox" Margin="0,0,0,4"/>
 
                 <Button Grid.Row="6" Grid.Column="1" Content="Сохранить настройки" HorizontalAlignment="Left" Margin="0,4,0,0" Click="OnSaveSettings"/>
+
+                <Border Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" x:Name="RestorePackagesPanel"
+                        Background="{StaticResource Dark.Panel}" BorderBrush="{StaticResource Dark.Border}"
+                        BorderThickness="1" CornerRadius="2" Padding="8,6" Margin="0,12,0,0" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Восстановить пакеты" Click="OnRestorePackages" VerticalAlignment="Center"/>
+                        <TextBlock Text="Update-Package -Reinstall для текущего решения" VerticalAlignment="Center"
+                                   Margin="8,0,0,0" Foreground="#C8C8C8"/>
+                    </StackPanel>
+                </Border>
             </Grid>
         </TabItem>
     </TabControl>

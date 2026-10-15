@@ -147,6 +147,78 @@ namespace RPAWriter.Tests
             Assert.That(all.Count, Is.EqualTo(added));
         }
 
+        [Test]
+        public void OpenXmlDocumentReader_GeneratesMarkdownWithHeadingAndTable()
+        {
+            var path = Path.Combine(_dir, "spec.docx");
+            Directory.CreateDirectory(_dir);
+            CreateDocxStructured(path);
+
+            var spec = new OpenXmlDocumentReader().Read(path);
+
+            Assert.That(spec.MarkdownText, Does.Contain("# Заголовок"));
+            Assert.That(spec.MarkdownText, Does.Contain("| Колонка A | Колонка B |"));
+            Assert.That(spec.MarkdownText, Does.Contain("| --- | --- |"));
+            Assert.That(spec.MarkdownText, Does.Contain("| значение 1 | значение 2 |"));
+        }
+
+        [Test]
+        public void OpenXmlDocumentReader_GeneratesExcelMarkdownTable()
+        {
+            var path = Path.Combine(_dir, "spec.xlsx");
+            Directory.CreateDirectory(_dir);
+            CreateXlsx(path);
+
+            var spec = new OpenXmlDocumentReader().Read(path);
+
+            Assert.That(spec.MarkdownText, Does.Contain("## Лист1"));
+            Assert.That(spec.MarkdownText, Does.Contain("| Открыть браузер | Прочитать таблицу |"));
+        }
+
+        private static void CreateDocxStructured(string path)
+        {
+            using (var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document))
+            {
+                var main = doc.AddMainDocumentPart();
+                main.Document = new Document(new Body());
+                main.Document.Body.AppendChild(new Paragraph(
+                    new ParagraphProperties(new ParagraphStyleId { Val = "Heading1" }),
+                    new Run(new Text("Заголовок"))));
+                var table = new DocumentFormat.OpenXml.Wordprocessing.Table(
+                    new TableRow(
+                        new TableCell(new Paragraph(new Run(new Text("Колонка A")))),
+                        new TableCell(new Paragraph(new Run(new Text("Колонка B"))))),
+                    new TableRow(
+                        new TableCell(new Paragraph(new Run(new Text("значение 1")))),
+                        new TableCell(new Paragraph(new Run(new Text("значение 2"))))));
+                main.Document.Body.AppendChild(table);
+                main.Document.Save();
+            }
+        }
+
+        private static void CreateXlsx(string path)
+        {
+            using (var doc = SpreadsheetDocument.Create(path, SpreadsheetDocumentType.Workbook))
+            {
+                var workbookPart = doc.AddWorkbookPart();
+                workbookPart.Workbook = new DocumentFormat.OpenXml.Spreadsheet.Workbook();
+                var worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+                worksheetPart.Worksheet = new DocumentFormat.OpenXml.Spreadsheet.Worksheet(new DocumentFormat.OpenXml.Spreadsheet.SheetData());
+                var sheets = workbookPart.Workbook.AppendChild(new DocumentFormat.OpenXml.Spreadsheet.Sheets());
+                var sheet = new DocumentFormat.OpenXml.Spreadsheet.Sheet { Id = workbookPart.GetIdOfPart(worksheetPart), SheetId = 1, Name = "Лист1" };
+                sheets.Append(sheet);
+
+                var sheetData = worksheetPart.Worksheet.GetFirstChild<DocumentFormat.OpenXml.Spreadsheet.SheetData>();
+                var row = new DocumentFormat.OpenXml.Spreadsheet.Row();
+                row.Append(new DocumentFormat.OpenXml.Spreadsheet.Cell { CellValue = new DocumentFormat.OpenXml.Spreadsheet.CellValue("Открыть браузер"), DataType = DocumentFormat.OpenXml.Spreadsheet.CellValues.String });
+                row.Append(new DocumentFormat.OpenXml.Spreadsheet.Cell { CellValue = new DocumentFormat.OpenXml.Spreadsheet.CellValue("Прочитать таблицу"), DataType = DocumentFormat.OpenXml.Spreadsheet.CellValues.String });
+                sheetData.Append(row);
+
+                worksheetPart.Worksheet.Save();
+                workbookPart.Workbook.Save();
+            }
+        }
+
         private static void CreateDocx(string path, params string[] paragraphs)
         {
             using (var doc = WordprocessingDocument.Create(path, WordprocessingDocumentType.Document))

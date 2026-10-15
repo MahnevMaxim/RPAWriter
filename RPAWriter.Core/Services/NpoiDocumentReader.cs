@@ -27,13 +27,16 @@ namespace RPAWriter.Core.Services
 
             var ext = Path.GetExtension(path).ToLowerInvariant();
             string text;
+            string markdown;
             switch (ext)
             {
                 case ".doc":
                     text = ReadDocText(path);
+                    markdown = text;
                     break;
                 case ".xls":
                     text = ReadXlsText(path);
+                    markdown = ReadXlsMarkdown(path);
                     break;
                 default:
                     throw new NotSupportedException("Неподдерживаемый формат документа для NPOI: " + ext);
@@ -43,7 +46,8 @@ namespace RPAWriter.Core.Services
             {
                 Name = Path.GetFileNameWithoutExtension(path),
                 SourcePath = path,
-                RawText = text
+                RawText = text,
+                MarkdownText = markdown
             };
         }
 
@@ -108,6 +112,44 @@ namespace RPAWriter.Core.Services
         /// Определяет кодировку по флагу fExtChar (Unicode) в FIB и собирает непрерывные
         /// последовательности печатаемых символов.
         /// </summary>
+        /// <summary>Извлекает структурированный Markdown из legacy Excel-книги (.xls): лист → заголовок + таблица.</summary>
+        public string ReadXlsMarkdown(string path)
+        {
+            var sb = new StringBuilder();
+            using (var fs = File.OpenRead(path))
+            {
+                var workbook = new HSSFWorkbook(fs);
+                try
+                {
+                    var formatter = new DataFormatter();
+                    for (int i = 0; i < workbook.NumberOfSheets; i++)
+                    {
+                        var sheet = workbook.GetSheetAt(i);
+                        sb.AppendLine("## " + workbook.GetSheetName(i));
+                        sb.AppendLine();
+                        var rows = new List<IReadOnlyList<string>>();
+                        foreach (IRow row in sheet)
+                        {
+                            var cells = new List<string>();
+                            for (int c = 0; c < row.LastCellNum; c++)
+                            {
+                                var cell = row.GetCell(c);
+                                cells.Add(cell == null ? "" : formatter.FormatCellValue(cell));
+                            }
+                            rows.Add(cells);
+                        }
+                        sb.Append(MarkdownContent.Table(rows));
+                        sb.AppendLine();
+                    }
+                }
+                finally
+                {
+                    workbook.Close();
+                }
+            }
+            return sb.ToString();
+        }
+
         public static string ExtractDocText(byte[] wordDocumentStream)
         {
             if (wordDocumentStream == null || wordDocumentStream.Length < 0x0C)
