@@ -5,12 +5,9 @@ using System.IO.Compression;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using EnvDTE;
 using EnvDTE80;
-using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
-using NuGet.VisualStudio;
 
 namespace RPAWriter2.Services
 {
@@ -84,11 +81,11 @@ namespace RPAWriter2.Services
             var message = "Решение создано.";
             try
             {
-                ReinstallPackages(dte, progress);
+                await RunPackageManagerCommandAsync("Update-Package -Reinstall", progress, cancellationToken);
             }
             catch (Exception ex)
             {
-                message += " Не удалось переустановить пакеты NuGet: " + ex.Message;
+                message += " Не удалось выполнить Update-Package -Reinstall: " + ex.Message;
             }
             return new RobotCreateResult { Success = true, Message = message, SolutionPath = slnFile };
         }
@@ -227,66 +224,50 @@ namespace RPAWriter2.Services
         }
 
         /// <summary>
-        /// Переустанавливает (reinstall) пакеты NuGet во всех проектах решения:
-        /// для каждого установленного пакета — сначала удаление, затем установка той же версии.
-        /// Использует документированные MEF-сервисы NuGet.VisualStudio (IVsPackageInstaller и др.).
+        /// Запускает команду в Package Manager Console (например «Update-Package -Reinstall»).
+        /// Команда передаётся через dte.ExecuteCommand с аргументом — так же, как в рабочем
+        /// PowerShell-сценарии ($dte.ExecuteCommand("View.PackageManagerConsole", "...")).
+        /// DTE получаем через Package.GetGlobalService, поэтому команда всегда уходит в текущий
+        /// экземпляр Visual Studio, даже если одновременно открыто несколько экземпляров VS.
         /// </summary>
-        private static void ReinstallPackages(DTE2 dte, IProgress<string>? progress)
+        public async Task RunPackageManagerCommandAsync(
+            string command, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
         {
-            var componentModel = Package.GetGlobalService(typeof(SComponentModel)) as IComponentModel;
-            if (componentModel == null)
-                throw new InvalidOperationException("Не удалось получить компонентную модель VS.");
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
-            var services = componentModel.GetService<IVsPackageInstallerServices>();
-            var uninstaller = componentModel.GetService<IVsPackageUninstaller>();
-            var installer = componentModel.GetService<IVsPackageInstaller>();
+            // DTE именно текущего экземпляра VS (а не «активного» объекта через GetActiveObject),
+            // чтобы команда не ушла в другой открытый экземпляр Visual Studio.
+            var dte = Package.GetGlobalService(typeof(SDTE)) as DTE2
+                ?? throw new InvalidOperationException("Не удалось получить доступ к Visual Studio (DTE).");
 
-            foreach (Project project in EnumerateProjects(dte))
+            Report(progress, "Запускаю команду NuGet: " + command);
+
+            // Активируем главное окно VS, чтобы консоль гарантированно была на переднем плане.
+            try { dte.MainWindow?.Activate(); }
+            catch { /* окно могло быть недоступно */ }
+
+            // Открываем/инициализируем Package Manager Console.
+            try { dte.ExecuteCommand("View.PackageManagerConsole"); }
+            catch { /* окно могло быть уже открыто */ }
+
+            // Даём Package Manager Console время инициализировать PowerShell-хост.
+            Report(progress, "Ожидаю готовность Package Manager Console…");
+            await Task.Delay(3000, cancellationToken).ConfigureAwait(false);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+
+            // Передаём команду аргументом — именно этот вариант ExecuteCommand реально выполняет
+            // команду в PMC (аналог рабочего PowerShell-сценария).
+            try
             {
-#pragma warning disable CS0618 // GetInstalledPackages(Project) устарел в пользу INuGetProjectService
-                var installed = services.GetInstalledPackages(project).ToList();
-#pragma warning restore CS0618
-
-                if (installed.Count == 0)
-                    continue;
-
-                Report(progress, "Переустанавливаю пакеты проекта: " + project.Name);
-                foreach (var pkg in installed)
-                {
-                    Report(progress, "  Reinstall: " + pkg.Id + " " + pkg.VersionString);
-                    uninstaller.UninstallPackage(project, pkg.Id, removeDependencies: false);
-                    installer.InstallPackage(null, project, pkg.Id, pkg.VersionString, ignoreDependencies: false);
-                }
+                dte.ExecuteCommand("View.PackageManagerConsole", command);
             }
-        }
-
-        private static IEnumerable<Project> EnumerateProjects(DTE2 dte)
-        {
-            var solution = dte?.Solution;
-            if (solution == null)
-                yield break;
-
-            foreach (Project project in solution.Projects)
-                foreach (var inner in EnumerateProjectTree(project))
-                    yield return inner;
-        }
-
-        private static IEnumerable<Project> EnumerateProjectTree(Project project)
-        {
-            if (project == null)
-                yield break;
-
-            // Папку решения (solution folder) разворачиваем рекурсивно.
-            if (project.Kind == EnvDTE80.ProjectKinds.vsProjectKindSolutionFolder)
+            catch (Exception ex)
             {
-                foreach (ProjectItem item in project.ProjectItems)
-                    if (item.SubProject is Project sub)
-                        foreach (var inner in EnumerateProjectTree(sub))
-                            yield return inner;
-                yield break;
+                throw new InvalidOperationException(
+                    "Не удалось отправить команду в Package Manager Console: " + ex.Message, ex);
             }
 
-            yield return project;
+            Report(progress, "Команда NuGet отправлена в консоль и выполняется.");
         }
 
         private static bool MatchesName(string filePath, string name, string baseName, bool hasExtension)

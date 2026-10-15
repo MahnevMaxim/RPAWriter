@@ -10,6 +10,8 @@ using Microsoft.VisualStudio.Shell.Interop;
 using EnvDTE;
 using EnvDTE80;
 using System.Threading.Tasks;
+using System.Threading;
+using System.Windows.Threading;
 using System.Windows.Input;
 using System.Linq;
 using System.Text;
@@ -33,6 +35,9 @@ namespace RPAWriter2
         private RobotTemplateService _robotTemplate;
         private DTE2? _dte;
         private readonly ObservableCollection<ChatMessage> _messages = new ObservableCollection<ChatMessage>();
+        private CancellationTokenSource? _chatCts;
+        private readonly DispatcherTimer _chatStatusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        private DateTime _chatStartedAt;
 
         public ToolWindow1Control()
         {
@@ -110,6 +115,7 @@ namespace RPAWriter2
         private void ShowError(Exception ex)
         {
             AppendChat("Ошибка: " + ex.Message);
+            AppendChat(ex.ToString());
             SetOutput(ex.ToString());
         }
 
@@ -160,6 +166,7 @@ namespace RPAWriter2
                 visible = true;
             }
             CreateRobotPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            RestorePackagesPanel.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
         }
 
         private void ShowImportProgress(string status)
@@ -397,6 +404,20 @@ namespace RPAWriter2
             }
             catch (Exception ex) { ShowError(ex); }
         }
+        private async void OnRestorePackages(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                await _robotTemplate.RunPackageManagerCommandAsync(
+                    "Update-Package -Reinstall",
+                    new Progress<string>(AppendChat));
+            }
+            catch (Exception ex)
+            {
+                ShowError(ex);
+            }
+        }
+
         private async void OnCreateRobot(object sender, RoutedEventArgs e)
         {
             var number = (RobotNumberBox?.Text ?? "").Trim();
@@ -445,20 +466,100 @@ namespace RPAWriter2
 
 #pragma warning restore VSTHRD100
 
+        private void StartChatStatus()
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(StartChatStatus));
+                return;
+            }
+            _chatStartedAt = DateTime.UtcNow;
+            _chatStatusTimer.Tick -= OnChatStatusTick;
+            _chatStatusTimer.Tick += OnChatStatusTick;
+            _chatStatusTimer.Start();
+            OnChatStatusTick(null, EventArgs.Empty);
+        }
+
+        private void OnChatStatusTick(object? sender, EventArgs e)
+        {
+            var elapsed = (int)(DateTime.UtcNow - _chatStartedAt).TotalSeconds;
+            var phase = elapsed < 2 ? "Отправляю запрос…" : "Думаю…";
+            AgentStatusText.Text = phase + " (" + elapsed + " с)";
+            AgentStatusText.Visibility = Visibility.Visible;
+            AgentProgress.Visibility = Visibility.Visible;
+            CancelButton.Visibility = Visibility.Visible;
+        }
+
+        private void StopChatStatus()
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(StopChatStatus));
+                return;
+            }
+            _chatStatusTimer.Stop();
+            _chatStatusTimer.Tick -= OnChatStatusTick;
+            AgentStatusText.Text = "";
+            AgentStatusText.Visibility = Visibility.Collapsed;
+            AgentProgress.Visibility = Visibility.Collapsed;
+            CancelButton.Visibility = Visibility.Collapsed;
+            SendButton.IsEnabled = true;
+        }
+
+        private void ShowChatStatusError(string message)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(() => ShowChatStatusError(message)));
+                return;
+            }
+            _chatStatusTimer.Stop();
+            _chatStatusTimer.Tick -= OnChatStatusTick;
+            AgentStatusText.Text = "Ошибка: " + message;
+            AgentStatusText.Visibility = Visibility.Visible;
+            AgentProgress.Visibility = Visibility.Collapsed;
+            CancelButton.Visibility = Visibility.Collapsed;
+            SendButton.IsEnabled = true;
+        }
+
+        private void OnCancelSend(object sender, RoutedEventArgs e)
+        {
+            _chatCts?.Cancel();
+        }
+
         private async Task SendMessageAsync()
         {
+            if (_chatCts != null) return; // уже ожидаем ответ агента
+
             var text = InputBox.Text.Trim();
             if (text.Length == 0) return;
             InputBox.Clear();
             AppendChatMessage(new ChatMessage { Role = "user", Text = text });
+
+            var cts = new CancellationTokenSource();
+            _chatCts = cts;
+            SendButton.IsEnabled = false;
+            StartChatStatus();
             try
             {
-                var response = await _ai.ChatAsync(text);
+                var response = await _ai.ChatAsync(text, cts.Token);
                 AppendChatMessage(new ChatMessage { Role = "agent", Text = response.Answer, Reasoning = response.Reasoning });
+                StopChatStatus();
+            }
+            catch (OperationCanceledException)
+            {
+                AppendChat("Запрос отменён.");
+                StopChatStatus();
             }
             catch (Exception ex)
             {
                 AppendChat("Ошибка: " + ex.Message);
+                ShowChatStatusError(ex.Message);
+            }
+            finally
+            {
+                _chatCts = null;
+                cts.Dispose();
             }
         }
 

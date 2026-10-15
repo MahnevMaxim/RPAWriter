@@ -30,6 +30,17 @@ namespace RPAWriter.Tests
         }
     }
 
+    /// <summary>Имитирует «зависший» провайдер: запрос не завершается, пока его не отменят (пользователем или таймаутом).</summary>
+    public class BlockingHttpHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
+    }
+
     [TestFixture]
     public class ProviderTests
     {
@@ -143,6 +154,28 @@ namespace RPAWriter.Tests
 
             Assert.That(reply.Answer, Is.EqualTo("Ответ"));
             Assert.That(reply.Reasoning, Is.EqualTo("Размышление"));
+        }
+
+        [Test]
+        public void OpenAiProvider_ChatAsync_CancelsWhenTokenIsCancelled()
+        {
+            var handler = new BlockingHttpHandler();
+            var provider = new OpenAiCompatibleProvider(new OpenAiOptions(), new HttpClient(handler));
+            using var cts = new CancellationTokenSource();
+
+            var pending = provider.ChatAsync("привет", cts.Token);
+            cts.Cancel();
+
+            Assert.ThrowsAsync(Is.InstanceOf<OperationCanceledException>(), async () => await pending);
+        }
+
+        [Test]
+        public void OpenAiProvider_ChatAsync_ThrowsTimeoutWhenProviderHangs()
+        {
+            var handler = new BlockingHttpHandler();
+            var provider = new OpenAiCompatibleProvider(new OpenAiOptions { TimeoutSeconds = 1 }, new HttpClient(handler));
+
+            Assert.ThrowsAsync<TimeoutException>(async () => await provider.ChatAsync("привет"));
         }
     }
 }

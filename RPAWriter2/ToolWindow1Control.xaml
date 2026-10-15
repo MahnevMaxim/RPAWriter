@@ -169,16 +169,28 @@
                     <RowDefinition Height="1*" MinHeight="60"/>
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="0" x:Name="CreateRobotPanel" Margin="0,0,0,6"
-                        Background="{StaticResource Dark.Panel}" BorderBrush="{StaticResource Dark.Border}"
-                        BorderThickness="1" CornerRadius="2" Padding="8,6" Visibility="Collapsed">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Номер робота:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <TextBox x:Name="RobotNumberBox" Width="140" VerticalAlignment="Center" Margin="0,0,8,0"
-                                 PreviewTextInput="OnRobotNumberPreviewTextInput"/>
-                        <Button Content="Создать робота" Click="OnCreateRobot" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Border>
+                <StackPanel Grid.Row="0" Margin="0,0,0,6">
+                    <Border x:Name="CreateRobotPanel" Margin="0,0,0,6"
+                            Background="{StaticResource Dark.Panel}" BorderBrush="{StaticResource Dark.Border}"
+                            BorderThickness="1" CornerRadius="2" Padding="8,6" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Номер робота:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBox x:Name="RobotNumberBox" Width="140" VerticalAlignment="Center" Margin="0,0,8,0"
+                                     PreviewTextInput="OnRobotNumberPreviewTextInput"/>
+                            <Button Content="Создать робота" Click="OnCreateRobot" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="RestorePackagesPanel"
+                            Background="{StaticResource Dark.Panel}" BorderBrush="{StaticResource Dark.Border}"
+                            BorderThickness="1" CornerRadius="2" Padding="8,6" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Восстановить пакеты" Click="OnRestorePackages" VerticalAlignment="Center"/>
+                            <TextBlock Text="Update-Package -Reinstall для текущего решения" VerticalAlignment="Center"
+                                       Margin="8,0,0,0" Foreground="#C8C8C8"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
 
                 <ScrollViewer Grid.Row="1" x:Name="ChatScroll"
                               VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
@@ -191,11 +203,13 @@
                                         <Expander Header="Размышления" IsExpanded="False"
                                                   Foreground="{StaticResource Dark.Text}"
                                                   Visibility="{Binding HasReasoning, Converter={StaticResource BoolToVis}}">
-                                            <TextBlock Text="{Binding Reasoning}" TextWrapping="Wrap"
-                                                       Foreground="#C8C8C8" FontStyle="Italic"/>
+                                            <TextBox Text="{Binding Reasoning, Mode=OneWay}" TextWrapping="Wrap"
+                                                     Foreground="#C8C8C8" FontStyle="Italic"
+                                                     IsReadOnly="True" Background="Transparent" BorderThickness="0" Padding="0"/>
                                         </Expander>
-                                        <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap"
-                                                   Foreground="{StaticResource Dark.Text}"/>
+                                        <TextBox Text="{Binding DisplayText, Mode=OneWay}" TextWrapping="Wrap"
+                                                 Foreground="{StaticResource Dark.Text}"
+                                                 IsReadOnly="True" Background="Transparent" BorderThickness="0" Padding="0"/>
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>
@@ -208,22 +222,37 @@
                               ResizeBehavior="PreviousAndNext"/>
 
                 <Grid Grid.Row="3">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0" x:Name="InputBox"
-                             AcceptsReturn="True" TextWrapping="Wrap"
-                             VerticalScrollBarVisibility="Auto"
-                             PreviewKeyDown="OnInputKeyDown"/>
-                    <Button Grid.Column="1" Width="28" Height="28"
-                            Margin="8,0,0,0" VerticalAlignment="Bottom" Click="OnSend"
-                            Style="{StaticResource IconButtonStyle}"
-                            ToolTip="Отправить (Enter)">
-                        <Path Data="M 2,21 L 23,12 L 2,3 L 2,10 L 17,12 L 2,14 L 2,21 Z"
-                              Fill="{StaticResource Dark.Text}" Stretch="Uniform"
-                              Width="18" Height="18"/>
-                    </Button>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4">
+                        <ProgressBar x:Name="AgentProgress" Width="16" Height="16"
+                                     IsIndeterminate="True" VerticalAlignment="Center"
+                                     Foreground="{StaticResource Dark.Accent}" Visibility="Collapsed"/>
+                        <TextBlock x:Name="AgentStatusText" VerticalAlignment="Center"
+                                   Margin="6,0,8,0" TextWrapping="Wrap" Visibility="Collapsed"/>
+                        <Button x:Name="CancelButton" Content="Стоп" Click="OnCancelSend"
+                                Padding="8,2" VerticalAlignment="Center" Visibility="Collapsed"/>
+                    </StackPanel>
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" x:Name="InputBox"
+                                 AcceptsReturn="True" TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 PreviewKeyDown="OnInputKeyDown"/>
+                        <Button Grid.Column="1" x:Name="SendButton" Width="28" Height="28"
+                                Margin="8,0,0,0" VerticalAlignment="Bottom" Click="OnSend"
+                                Style="{StaticResource IconButtonStyle}"
+                                ToolTip="Отправить (Enter)">
+                            <Path Data="M 2,21 L 23,12 L 2,3 L 2,10 L 17,12 L 2,14 L 2,21 Z"
+                                  Fill="{StaticResource Dark.Text}" Stretch="Uniform"
+                                  Width="18" Height="18"/>
+                        </Button>
+                    </Grid>
                 </Grid>
             </Grid>
         </TabItem>
