@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using EnvDTE80;
+using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 
@@ -71,12 +73,23 @@ namespace RPAWriter2.Services
                 Report(progress, "Создаю проект из шаблона: " + vstPath);
                 solution.AddFromTemplate(vstPath, destDir, solutionName, false);
                 solution.SaveAs(slnFile);
-                return new RobotCreateResult { Success = true, Message = "Решение создано.", SolutionPath = slnFile };
             }
             catch (Exception ex)
             {
                 return Fail("Не удалось создать решение из шаблона: " + ex.Message);
             }
+
+            // После создания решения переустанавливаем пакеты NuGet.
+            var message = "Решение создано.";
+            try
+            {
+                RunNuGetReinstall(dte, progress);
+            }
+            catch (Exception ex)
+            {
+                message += " Не удалось запустить Update-Package -Reinstall: " + ex.Message;
+            }
+            return new RobotCreateResult { Success = true, Message = message, SolutionPath = slnFile };
         }
 
         private static RobotCreateResult Fail(string message) =>
@@ -210,6 +223,43 @@ namespace RPAWriter2.Services
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Запускает команду NuGet в Package Manager Console через MEF-сервис IPowerConsoleService.
+        /// Тип сервиса и метод Execute находятся рефлексией, т.к. сборка NuGet.Console.dll
+        /// версионирована под конкретную VS и не должна жёстко подключаться.
+        /// </summary>
+        private static void RunNuGetReinstall(DTE2 dte, IProgress<string>? progress)
+        {
+            const string command = "Update-Package -Reinstall";
+            Report(progress, "Запускаю команду NuGet: " + command);
+
+            // Открываем/инициализируем Package Manager Console.
+            try { dte.ExecuteCommand("View.PackageManagerConsole"); }
+            catch { /* окно могло быть уже открыто */ }
+
+            var componentModel = Package.GetGlobalService(typeof(SComponentModel)) as IComponentModel;
+            if (componentModel == null)
+                throw new InvalidOperationException("Не удалось получить компонентную модель VS.");
+
+            // NuGet.Console.dll лежит рядом с devenv.exe: <IDE>\CommonExtensions\Microsoft\NuGet\
+            var ideDir = Path.GetDirectoryName(dte.FullName ?? "");
+            if (string.IsNullOrEmpty(ideDir))
+                throw new InvalidOperationException("Не удалось определить каталог установки VS.");
+
+            var consoleDll = Path.Combine(ideDir, "CommonExtensions", "Microsoft", "NuGet", "NuGet.Console.dll");
+            var consoleServiceType = Assembly.LoadFrom(consoleDll)
+                .GetType("NuGetConsole.IPowerConsoleService", throwOnError: true)!;
+
+            var getService = typeof(IComponentModel).GetMethod("GetService", Type.EmptyTypes)!;
+            var console = getService.MakeGenericMethod(consoleServiceType).Invoke(componentModel, null)
+                ?? throw new InvalidOperationException("Служба Package Manager Console недоступна.");
+
+            var execute = consoleServiceType.GetMethod("Execute")
+                ?? throw new InvalidOperationException("Метод Execute службы PMC не найден.");
+            var accepted = (bool)execute.Invoke(console, new object[] { command, null })!;
+            Report(progress, accepted ? "Команда NuGet принята консолью." : "Команда NuGet не принята консолью.");
         }
 
         private static bool MatchesName(string filePath, string name, string baseName, bool hasExtension)
